@@ -1,0 +1,4 @@
+# 模拟设备的数据（TF 卡、设置、截图）和本机 IDE 配置不入库。
+# Simulated device data and per-machine IDE config stay out of the repo.
+data/
+compile_flags.txt

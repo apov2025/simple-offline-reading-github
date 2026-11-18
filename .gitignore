@@ -1,0 +1,33 @@
+# Local build/cache/user data
+build*/
+managed_components/
+sdkconfig
+sdkconfig.old
+*.elf
+*.map
+*.o
+*.a
+*.log
+*.pyc
+__pycache__/
+.DS_Store
+.vscode/
+.venv/
+venv/
+*.env
+.env
+sim/data/
+sim/compile_flags.txt
+ready/
+originals/
+prepared/
+plan.json
+docs/local/
+docs/HANDOFF.local.md
+# User content; retain only upstream open font + license
+sdcard/books/
+sdcard/fonts/*
+!sdcard/fonts/ChillDuanSansVF.ttf
+!sdcard/fonts/OFL.txt
+# Share compiled archives via Releases
+release-artifacts/

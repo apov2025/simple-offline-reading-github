@@ -1,0 +1,15 @@
+{
+  "project": "简单离线阅读 by apov",
+  "release": "2026.11.18-preview",
+  "upstream_baseline": "MindReset/read_pico_firmware @ 6a247cc",
+  "source_kind": "current working-tree snapshot, including documented modifications",
+  "idf_version": "v6.1",
+  "idf_commit": "fff9895c82d744c7237be8847347bdd1b07c6643",
+  "configuration_files": [
+    "configs/pico.sdkconfig",
+    "configs/metalio.sdkconfig"
+  ],
+  "device_identifiers_included": false,
+  "personal_device_backups_included": false,
+  "notes": "Source PNG metadata removed from supplied/generated logo and preview; firmware uses the included packed array."
+}

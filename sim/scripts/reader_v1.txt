@@ -1,0 +1,44 @@
+# 阅读器第一版的回归脚本：书库 → 打开 → 翻页 → 设置面板 → 右键全刷 → 返回 → 拔插卡 → 演示菜单。
+# Regression walk for reader v1: library → open → turn → settings → right-key refresh → back → card out/in → demo menu.
+# 需要 books 文件夹里至少两本 EPUB（python3 tools/gen_book_fixtures.py 会生成三本）。
+# Needs at least two EPUBs under books (python3 tools/gen_book_fixtures.py makes three).
+#
+#   SDL_VIDEODRIVER=dummy SIM_FAST=1 SIM_DATA=<临时目录> SIM_SCRIPT=sim/scripts/reader_v1.txt sim/build/read_pico_sim
+wait 1800
+shot 01-library
+tap 340 290
+wait 2500
+tap 620 1150
+wait 1200
+shot 02-next-page
+key 1
+wait 1200
+shot 03-panel
+tap 464 862
+wait 1500
+shot 04-size-64
+tap 546 1142
+wait 1200
+shot 05-refresh-clear
+key 1
+wait 1200
+shot 06-panel-closed
+key 3
+wait 1200
+shot 07-full-refresh
+swipe 150 600 500 600 250
+wait 1200
+shot 08-previous-page
+key 2
+wait 1500
+shot 09-back-to-library
+card 0
+wait 1800
+shot 10-card-out-builtin-books
+card 1
+wait 2500
+shot 11-library-again
+key 2 800
+wait 1500
+shot 12-demo-menu
+quit

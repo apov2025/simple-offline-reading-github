@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#ffffff">
+<title>Reader by apov · 配套工具</title>
+<style>
+  /* 视觉语言取自 Catalog by apov：白底、Inter、近黑的字、发丝线、胶囊按钮、一种绿色点缀。
+     放到网站上时可以直接换成引用 catalog 的样式表。 */
+  :root {
+    font-family: "Inter Variable", Inter, Arial, "PingFang SC", "Noto Sans CJK SC", sans-serif;
+    color: #171717; background: #fff; font-synthesis: none; -webkit-font-smoothing: antialiased; font-weight: 400;
+    --muted: #70706c; --soft: #646b70; --line: #e7e7e3; --paper: #f5f5f3; --stage: #edf0f2; --green: #526449; --green-soft: #dbe4d2;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100dvh; display: flex; flex-direction: column; }
+  button, select, input { font: inherit; color: inherit; }
+  button { border: 0; background: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--green); outline-offset: 4px; }
+  ::selection { background: #e4ebdc; }
+
+  .site-header, main, .site-footer { width: 100%; max-width: 1536px; margin: 0 auto; padding-inline: 48px; }
+  .site-header { height: 100px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+  .site-title { margin: 0; font-size: 23px; font-weight: 450; letter-spacing: -.8px; line-height: 1.2; white-space: nowrap; }
+  .site-title strong { font-weight: 650; }
+  .site-title span { color: #777; font-weight: 400; }
+  .site-header nav { display: flex; gap: 28px; align-items: center; }
+  .site-header nav button { font-size: 12px; padding-block: 12px; color: var(--muted); }
+  .site-header nav button[aria-selected="true"] { color: #171717; font-weight: 650; }
+  main { flex: 1; padding-bottom: 70px; }
+  section[hidden] { display: none; }
+
+  .section-heading { display: flex; align-items: end; justify-content: space-between; gap: 30px; margin: 24px 0 30px; }
+  h2 { font-size: clamp(27px, 3vw, 38px); line-height: 1.15; font-weight: 450; letter-spacing: -1.3px; margin: 0; }
+  .section-heading p { color: var(--soft); font-size: 14px; line-height: 1.65; margin: 15px 0 0; max-width: 560px; }
+  h3 { font-size: 14px; font-weight: 650; line-height: 20px; margin: 0; }
+  code { font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; background: var(--paper); padding: 2px 6px; border-radius: 4px; }
+  .note { color: var(--soft); font-size: 12px; line-height: 1.65; }
+
+  .button { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 12px 24px; border-radius: 30px;
+            color: #fff; background: #171717; font-size: 13px; white-space: nowrap; }
+  .button:hover:not(:disabled) { background: #353535; }
+  .button.quiet { min-height: 40px; padding: 10px 17px; border: 1px solid #b9c0c4; border-radius: 24px; font-size: 12px; background: transparent; color: #171717; }
+  .button.quiet:hover:not(:disabled) { background: var(--paper); }
+  .button:disabled { opacity: .4; cursor: default; }
+  .row { display: flex; gap: 14px 20px; flex-wrap: wrap; align-items: center; margin: 24px 0 8px; }
+
+  /* ---- 整理书籍 ---- */
+  .drop { background: var(--stage); border-radius: 4px; padding: 54px 20px; text-align: center; font-size: 14px; color: var(--soft);
+          outline: 2px solid transparent; outline-offset: -8px; transition: outline-color .15s; }
+  .drop.over { outline-color: var(--green); color: #171717; }
+  .drop p { margin: 0 0 16px; }
+  .drop strong { color: #171717; font-weight: 600; }
+  #status { min-height: 20px; margin: 0; font-size: 12px; color: var(--green); }
+  #status.bad { color: #8a4b1f; }
+  .tablewrap { overflow-x: auto; margin-top: 26px; border-top: 1px solid var(--line); }
+  table { border-collapse: collapse; width: 100%; min-width: 780px; font-size: 13px; }
+  th, td { text-align: left; padding: 13px 12px 13px 0; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-weight: 400; color: var(--muted); font-size: 12px; }
+  td input, td select { width: 100%; border: 1px solid transparent; border-radius: 4px; background: transparent; padding: 7px 8px; margin-left: -8px; }
+  td input:hover, td select:hover { border-color: var(--line); }
+  td input:focus, td select:focus { border-color: #171717; outline: none; }
+  td.title input { font-weight: 650; }
+  td.year input { width: 5.4em; font-variant-numeric: tabular-nums; }
+  td.fname { font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace; color: var(--soft); word-break: break-all; }
+  td.fname .flag { display: block; font-family: inherit; color: #8a4b1f; font: 12px/1.5 "Inter Variable", Inter, Arial, "PingFang SC", sans-serif; }
+  td.del { padding-right: 0; text-align: right; }
+  td.del button { min-width: 44px; min-height: 44px; font-size: 18px; color: var(--muted); }
+  td.del button:hover { color: #171717; }
+  .empty { padding: 40px 0; text-align: center; color: var(--muted); font-size: 13px; border-bottom: 1px solid var(--line); }
+
+  /* ---- 每日打卡 ---- */
+  .split { display: grid; grid-template-columns: .9fr 1.1fr; gap: 65px; align-items: start; }
+  .stage { background: var(--stage); border-radius: 4px; padding: 44px 20px; display: flex; justify-content: center; }
+  .device { width: min(100%, 300px); background: #ededeb; border: 1px solid #a6a6a3; border-radius: 16px; padding: 16px 16px 0; box-shadow: 0 14px 30px #0000001f; }
+  .screen { background: #e4e2d8; aspect-ratio: 684 / 1216; border: 1px solid #c9c8c1; border-radius: 3px; padding: 7% 6.5% 0; overflow: hidden; display: flex; flex-direction: column; color: #1b1b19; }
+  .screen .top { display: flex; align-items: flex-end; justify-content: space-between; border-bottom: 1px solid #1b1b19; padding-bottom: 6%; }
+  .screen .top b { font-size: 25px; font-weight: 450; line-height: 1; letter-spacing: -.5px; }
+  .dots { display: flex; gap: 6px; padding-bottom: 3px; }
+  .dots i { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid #1b1b19; transition: background .2s; }
+  .dots i.on { background: #1b1b19; }
+  .screen ul { list-style: none; margin: 0; padding: 0; }
+  .screen li { padding: 4.4% 0 3.8%; border-bottom: 1px solid #c7c5ba; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .screen li span { display: block; }
+  .screen li .t { font-size: 15px; line-height: 1.3; }
+  .screen li .a, .screen li .p { font-size: 10px; color: #55544e; }
+  .screen li .p { white-space: nowrap; }
+  .keys { display: flex; justify-content: space-between; padding: 15px 22% 16px; color: #a3acab; }
+  .keys span { display: block; width: 18px; height: 2px; background: currentColor; margin-top: 6px; }
+  .keys span.ring { width: 13px; height: 13px; border-radius: 50%; border: 2px solid currentColor; background: none; margin-top: 0; }
+
+  .count { font-size: clamp(40px, 5vw, 58px); font-weight: 450; letter-spacing: -2px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .count small { font-size: 14px; letter-spacing: 0; color: var(--muted); font-weight: 400; margin-left: 6px; }
+  .state { font-size: 15px; line-height: 1.6; margin: 14px 0 26px; }
+  .slider { width: 100%; max-width: 420px; accent-color: #171717; display: block; margin-top: 6px; }
+  .specs { margin: 40px 0 0; font-size: 13px; line-height: 1.65; border-top: 1px solid var(--line); }
+  .specs > div { display: grid; grid-template-columns: 135px 1fr; gap: 20px; padding: 17px 0; border-bottom: 1px solid var(--line); }
+  .specs dt { color: var(--soft); }
+  .specs dd { margin: 0; }
+  .cal { display: grid; grid-template-columns: repeat(7, 22px); gap: 5px; }
+  .cal div { aspect-ratio: 1; border-radius: 2px; background: var(--paper); }
+  .cal div[data-l="1"] { background: #dbe4d2; } .cal div[data-l="2"] { background: #bccbaf; }
+  .cal div[data-l="3"] { background: #97ab87; } .cal div[data-l="4"] { background: #71875f; }
+  .cal div[data-l="5"] { background: var(--green); }
+  .cal div.today { outline: 1.5px solid #171717; outline-offset: 2px; }
+  .legend { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); margin-top: 12px; }
+  .legend i { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+
+  /* ---- 阅读地图 ---- */
+  .figures { display: flex; gap: 60px; flex-wrap: wrap; padding: 26px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .figures b { display: block; font-size: 30px; font-weight: 450; letter-spacing: -.8px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .figures span { font-size: 12px; color: var(--muted); }
+  .map { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); column-gap: 28px; row-gap: 44px; }
+  .district h3 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .district h3 small { font-size: 11px; font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; margin: 12px 0 10px; }
+  .tiles i { aspect-ratio: 1; border-radius: 2px; background: var(--paper); }
+  .tiles i.on { background: var(--green); }
+  .tiles i.half { background: var(--green-soft); }
+  .district p { margin: 0; font-size: 12px; line-height: 18px; color: var(--muted); min-height: 36px; }
+  .district.dark h3 { color: var(--muted); font-weight: 400; }
+
+  .site-footer { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding-block: 25px; font-size: 10px; color: var(--muted); }
+
+  @media (max-width: 1100px) { .map { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @media (max-width: 900px) { .split { gap: 35px; } .specs > div { grid-template-columns: 105px 1fr; } }
+  @media (max-width: 700px) {
+    .site-header, main, .site-footer { padding-inline: 16px; }
+    .site-header { height: auto; padding-block: 18px; flex-direction: column; align-items: flex-start; gap: 4px; }
+    .site-header nav { gap: 22px; }
+    .section-heading { display: block; }
+    .split { grid-template-columns: 1fr; }
+    .map { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 20px; row-gap: 32px; }
+    .figures { gap: 28px; }
+  }
+</style>
+</head>
+<body>
+  <header class="site-header">
+    <h1 class="site-title"><strong>Reader</strong> <span>by apov</span></h1>
+    <nav role="tablist" aria-label="功能">
+      <button role="tab" aria-selected="true" aria-controls="tab-books" id="t-books">整理书籍</button>
+      <button role="tab" aria-selected="false" aria-controls="tab-daily" id="t-daily">每日打卡</button>
+      <button role="tab" aria-selected="false" aria-controls="tab-map" id="t-map">阅读地图</button>
+    </nav>
+  </header>
+
+  <main>
+  <!-- ================= 整理书籍 ================= -->
+  <section role="tabpanel" id="tab-books" aria-labelledby="t-books">
+    <div class="section-heading">
+      <div>
+        <h2>把书整理好，再放进小纸</h2>
+        <p>设备的书库从文件名里读书名、作者和年份，格式是 <code>书名 - 作者 (年份).epub</code>。把 EPUB 拖进来，这里读出书里自带的信息，你核对后一键改名。文件内容不会被改动，也不会上传到任何地方。</p>
+      </div>
+    </div>
+
+    <div class="drop" id="drop">
+      <p><strong>把 EPUB 文件拖到这里</strong></p>
+      <button class="button quiet" id="pick">选择文件</button>
+      <input type="file" id="file" accept=".epub,application/epub+zip" multiple hidden>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th style="width:25%">书名</th><th style="width:17%">作者</th><th>年份</th><th style="width:12%">地图分区</th><th>改名后的文件名</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div class="empty" id="empty">还没有书。</div>
+    </div>
+
+    <div class="row">
+      <button class="button" id="save-card" disabled>写入 TF 卡的 books 文件夹</button>
+      <button class="button quiet" id="save-dl" disabled>逐个下载改名后的文件</button>
+      <span class="note" id="fs-note"></span>
+    </div>
+    <p id="status" role="status" aria-live="polite"></p>
+    <p class="note" style="max-width:560px;margin-top:22px">年份请核对：很多 EPUB 里写的是电子版的制作日期，不是这本书初版的年份。"地图分区"只用于本页的阅读地图，不会写进文件名。</p>
+  </section>
+
+  <!-- ================= 每日打卡 ================= -->
+  <section role="tabpanel" id="tab-daily" aria-labelledby="t-daily" hidden>
+    <div class="section-heading">
+      <div>
+        <h2>每天五个点</h2>
+        <p>书库页面顶端有五个点，一个点代表 3 分钟。读满 3 分钟就算今天打卡成功，读满 15 分钟五个点全亮。没有连续天数，没有排名，也不会提醒你。</p>
+      </div>
+    </div>
+    <div class="split">
+      <div class="stage">
+        <div class="device" aria-label="设备书库页面的示意">
+          <div class="screen">
+            <div class="top"><b>书库</b><div class="dots" id="dots" role="img" aria-label="今日打卡进度"></div></div>
+            <ul id="mock-list"></ul>
+          </div>
+          <div class="keys"><span></span><span class="ring"></span><span></span></div>
+        </div>
+      </div>
+      <div>
+        <div class="count"><span id="min">0</span><small>分钟</small></div>
+        <p class="state" id="state"></p>
+        <label class="note" for="minutes">拖动试试：今天读了多久</label>
+        <input class="slider" type="range" id="minutes" min="0" max="30" step="1" value="0">
+        <dl class="specs">
+          <div><dt>怎么计时</dt><dd>只在翻页的时候计时；一页停留超过两分钟就不再算，放着不动不会计时。</dd></div>
+          <div><dt>一个点</dt><dd>3 分钟。亮一个点就算今天打卡成功。</dd></div>
+          <div><dt>五个点</dt><dd>15 分钟，算读满。超过 15 分钟不再有额外的标记。</dd></div>
+          <div><dt>重新开始</dt><dd>每天零点回到五个空点。</dd></div>
+          <div><dt>最近四周</dt><dd>
+            <div class="cal" id="cal" role="img" aria-label="最近四周每天的阅读情况"></div>
+            <div class="legend"><span>没读</span><i style="background:#f5f5f3"></i><i style="background:#dbe4d2"></i><i style="background:#bccbaf"></i><i style="background:#97ab87"></i><i style="background:#71875f"></i><i style="background:#526449"></i><span>读满</span></div>
+          </dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 阅读地图 ================= -->
+  <section role="tabpanel" id="tab-map" aria-labelledby="t-map" hidden>
+    <div class="section-heading">
+      <div>
+        <h2>阅读地图</h2>
+        <p>每个分区 18 格。在这个分区的书上每读满 15 分钟点亮一格，不足 15 分钟的显示成浅色。读什么，地图上哪里就亮起来。</p>
+      </div>
+      <div class="row" style="margin:0">
+        <button class="button quiet" id="sim-day">模拟再读一天</button>
+        <button class="button quiet" id="reset">恢复示例数据</button>
+      </div>
+    </div>
+    <div class="figures" id="summary"></div>
+    <div class="map" id="map"></div>
+  </section>
+  </main>
+
+  <footer class="site-footer"><span>原型 · 打卡和地图用的是示例数据</span><span>Reader by apov</span></footer>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const DISTRICTS = ["文学", "历史", "哲学", "社会", "科学", "技术", "艺术", "经济", "心理", "传记", "其他"];
+const TILES = 18;
+
+/* ---------------- 示例数据 ---------------- */
+const SAMPLE_BOOKS = [
+  { title: "三体", author: "刘慈欣", year: "2008", district: "文学", minutes: 210, pct: 64 },
+  { title: "乡土中国", author: "费孝通", year: "1948", district: "社会", minutes: 95, pct: 100 },
+  { title: "万历十五年", author: "黄仁宇", year: "1981", district: "历史", minutes: 150, pct: 41 },
+  { title: "苏菲的世界", author: "乔斯坦·贾德", year: "1991", district: "哲学", minutes: 40, pct: 12 },
+  { title: "从一到无穷大", author: "乔治·伽莫夫", year: "1947", district: "科学", minutes: 70, pct: 30 },
+];
+const SAMPLE_DAYS = [0,6,15,3,0,18,15, 9,0,15,15,4,0,12, 15,3,0,0,16,15,7, 3,15,0,9,15,15];
+let books = structuredClone(SAMPLE_BOOKS);
+let days = SAMPLE_DAYS.slice();   // 最近 27 天，不含今天
+let imported = [];               // 拖进来的书：{file, title, author, year, district, src}
+
+/* ---------------- 标签页 ---------------- */
+document.querySelectorAll('nav [role=tab]').forEach(tab => tab.addEventListener('click', () => {
+  document.querySelectorAll('nav [role=tab]').forEach(t => t.setAttribute('aria-selected', String(t === tab)));
+  document.querySelectorAll('section[role=tabpanel]').forEach(p => p.hidden = p.id !== tab.getAttribute('aria-controls'));
+}));
+
+/* ---------------- 读 EPUB：不依赖任何库 ---------------- */
+// EPUB 是个 ZIP。从文件尾找到中央目录，按需解压其中的条目。
+async function zipEntries(file) {
+  const tailSize = Math.min(file.size, 66000);
+  const tail = new DataView(await file.slice(file.size - tailSize).arrayBuffer());
+  let eocd = -1;
+  for (let i = tail.byteLength - 22; i >= 0; i--) if (tail.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error("不是有效的 EPUB（找不到 ZIP 目录）");
+  const count = tail.getUint16(eocd + 10, true), cdSize = tail.getUint32(eocd + 12, true), cdOff = tail.getUint32(eocd + 16, true);
+  const cd = new DataView(await file.slice(cdOff, cdOff + cdSize).arrayBuffer());
+  const dec = new TextDecoder(), map = new Map();
+  let p = 0;
+  for (let i = 0; i < count && p + 46 <= cd.byteLength; i++) {
+    if (cd.getUint32(p, true) !== 0x02014b50) break;
+    const method = cd.getUint16(p + 10, true), comp = cd.getUint32(p + 20, true);
+    const nameLen = cd.getUint16(p + 28, true), extraLen = cd.getUint16(p + 30, true), commentLen = cd.getUint16(p + 32, true);
+    const offset = cd.getUint32(p + 42, true);
+    const name = dec.decode(new Uint8Array(cd.buffer, cd.byteOffset + p + 46, nameLen));
+    map.set(name, { method, comp, offset });
+    p += 46 + nameLen + extraLen + commentLen;
+  }
+  return map;
+}
+async function zipRead(file, entry) {
+  const head = new DataView(await file.slice(entry.offset, entry.offset + 30).arrayBuffer());
+  if (head.getUint32(0, true) !== 0x04034b50) throw new Error("EPUB 文件损坏");
+  const start = entry.offset + 30 + head.getUint16(26, true) + head.getUint16(28, true);
+  const raw = file.slice(start, start + entry.comp);
+  if (entry.method === 0) return await raw.text();
+  if (entry.method !== 8) throw new Error("EPUB 用了不支持的压缩方式");
+  return await new Response(raw.stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
+}
+function guessDistrict(subjects) {
+  const s = subjects.join(" ").toLowerCase();
+  const rules = [["小说 文学 诗 散文 fiction novel poetry literature", "文学"], ["历史 history", "历史"], ["哲学 philosophy", "哲学"],
+    ["社会 政治 sociology politics", "社会"], ["科学 物理 数学 生物 science physics math biology", "科学"],
+    ["技术 计算机 编程 工程 computer programming technology engineering", "技术"], ["艺术 音乐 设计 art music design", "艺术"],
+    ["经济 金融 管理 商业 economics finance business", "经济"], ["心理 psychology", "心理"], ["传记 回忆录 biography memoir", "传记"]];
+  for (const [words, d] of rules) if (words.split(" ").some(w => s.includes(w))) return d;
+  return "其他";
+}
+async function readEpub(file) {
+  const entries = await zipEntries(file);
+  const container = entries.get("META-INF/container.xml");
+  if (!container) throw new Error("不是 EPUB（缺少 container.xml）");
+  const xml = t => new DOMParser().parseFromString(t, "application/xml");
+  const opfPath = xml(await zipRead(file, container)).querySelector("rootfile")?.getAttribute("full-path");
+  const opfEntry = opfPath && entries.get(opfPath);
+  if (!opfEntry) throw new Error("EPUB 里找不到书籍信息");
+  const opf = xml(await zipRead(file, opfEntry));
+  const all = name => [...opf.getElementsByTagNameNS("http://purl.org/dc/elements/1.1/", name)].map(e => e.textContent.trim()).filter(Boolean);
+  const year = (all("date").join(" ").match(/\b(1[0-9]{3}|20[0-9]{2})\b/) || [""])[0];
+  return { title: all("title")[0] || file.name.replace(/\.epub$/i, ""), author: all("creator")[0] || "", year, district: guessDistrict(all("subject")) };
+}
+
+/* ---------------- 文件名 ---------------- */
+const clean = s => s.replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim();
+function fileName(b) {
+  const title = clean(b.title) || "未命名", author = clean(b.author), year = /^\d{4}$/.test(b.year.trim()) ? b.year.trim() : "";
+  return title + (author ? " - " + author : "") + (year ? " (" + year + ")" : "") + ".epub";
+}
+const tooLong = name => new TextEncoder().encode(name).length > 190;   // 设备上文件名最多约 200 字节
+
+/* ---------------- 表格 ---------------- */
+function renderRows() {
+  const tbody = $("#rows");
+  tbody.textContent = "";
+  imported.forEach((b, i) => {
+    const tr = document.createElement("tr");
+    const cell = (cls, node) => { const td = document.createElement("td"); if (cls) td.className = cls; td.append(node); tr.append(td); return td; };
+    const input = (key, label, extra = {}) => {
+      const el = Object.assign(document.createElement("input"), { value: b[key], ...extra });
+      el.setAttribute("aria-label", label);
+      el.addEventListener("input", () => { b[key] = el.value; updateName(); });
+      return el;
+    };
+    cell("title", input("title", "书名"));
+    cell("", input("author", "作者"));
+    cell("year", input("year", "年份", { inputMode: "numeric", maxLength: 4, placeholder: "—" }));
+    const sel = document.createElement("select");
+    sel.setAttribute("aria-label", "地图分区");
+    DISTRICTS.forEach(d => sel.append(new Option(d, d, false, d === b.district)));
+    sel.addEventListener("change", () => { b.district = sel.value; renderMap(); });
+    cell("", sel);
+    const nameTd = cell("fname", "");
+    const del = Object.assign(document.createElement("button"), { textContent: "×", title: "移除" });
+    del.setAttribute("aria-label", "移除《" + b.title + "》");
+    del.addEventListener("click", () => { imported.splice(i, 1); renderRows(); renderMap(); renderMock(); });
+    cell("del", del);
+    function updateName() {
+      const name = fileName(b);
+      nameTd.textContent = name;
+      if (tooLong(name)) nameTd.append(Object.assign(document.createElement("span"), { className: "flag", textContent: "文件名太长，设备可能读不到，请缩短书名或作者" }));
+      else if (b.year.trim() && !/^\d{4}$/.test(b.year.trim())) nameTd.append(Object.assign(document.createElement("span"), { className: "flag", textContent: "年份要写四位数字，否则不会放进文件名" }));
+      renderMock();
+    }
+    updateName();
+    tbody.append(tr);
+  });
+  $("#empty").hidden = imported.length > 0;
+  $("#save-dl").disabled = imported.length === 0;
+  $("#save-card").disabled = imported.length === 0 || !window.showDirectoryPicker;
+}
+function say(text, bad = false) { const el = $("#status"); el.textContent = text; el.classList.toggle("bad", bad); }
+
+async function addFiles(files) {
+  const epubs = [...files].filter(f => /\.epub$/i.test(f.name));
+  if (!epubs.length) { say("只认 EPUB 文件。", true); return; }
+  let failed = 0;
+  for (const file of epubs) {
+    try { imported.push({ file, minutes: 0, pct: 0, ...(await readEpub(file)) }); }
+    catch (e) { failed++; imported.push({ file, minutes: 0, pct: 0, title: file.name.replace(/\.epub$/i, ""), author: "", year: "", district: "其他" }); }
+  }
+  say(failed ? `读入 ${epubs.length} 本，其中 ${failed} 本读不出书内信息，已用文件名代替，请手动填写。` : `读入 ${epubs.length} 本，请核对后保存。`, failed > 0);
+  renderRows(); renderMap(); renderMock();
+}
+const drop = $("#drop");
+["dragenter", "dragover"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", e => addFiles(e.dataTransfer.files));
+$("#pick").addEventListener("click", () => $("#file").click());
+$("#file").addEventListener("change", e => { addFiles(e.target.files); e.target.value = ""; });
+
+$("#save-dl").addEventListener("click", () => {
+  imported.forEach((b, i) => setTimeout(() => {
+    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(b.file), download: fileName(b) });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }, i * 250));
+  say(`正在下载 ${imported.length} 个文件，下载完把它们放进 TF 卡的 books 文件夹。`);
+});
+$("#save-card").addEventListener("click", async () => {
+  try {
+    let dir = await window.showDirectoryPicker({ mode: "readwrite" });
+    // 选的是卡的根目录就进 books；选的本来就是 books 就直接写。
+    if (dir.name !== "books") dir = await dir.getDirectoryHandle("books", { create: true });
+    for (const b of imported) {
+      const handle = await dir.getFileHandle(fileName(b), { create: true });
+      const out = await handle.createWritable();
+      await out.write(b.file);
+      await out.close();
+    }
+    say(`已写入 ${imported.length} 本。把卡安全弹出后插回设备，书库会自动出现。`);
+  } catch (e) {
+    if (e.name !== "AbortError") say("写入失败：" + e.message, true);
+  }
+});
+$("#fs-note").textContent = window.showDirectoryPicker ? "选 TF 卡的根目录或其中的 books 文件夹。" : "这个浏览器不能直接写入文件夹（Chrome、Edge 可以），请用下载。";
+
+/* ---------------- 每日打卡 ---------------- */
+function allBooks() { return books.concat(imported); }
+function renderMock() {
+  const ul = $("#mock-list");
+  ul.textContent = "";
+  allBooks().slice(0, 7).forEach(b => {
+    const li = document.createElement("li"), left = document.createElement("span");
+    left.append(Object.assign(document.createElement("span"), { className: "t", textContent: clean(b.title) || "未命名" }));
+    const sub = [clean(b.author), /^\d{4}$/.test(String(b.year).trim()) ? String(b.year).trim() : ""].filter(Boolean).join(" · ");
+    if (sub) left.append(Object.assign(document.createElement("span"), { className: "a", textContent: sub }));
+    li.append(left);
+    if (b.pct) li.append(Object.assign(document.createElement("span"), { className: "p", textContent: b.pct + "%" }));
+    ul.append(li);
+  });
+}
+function renderDaily() {
+  const m = Number($("#minutes").value), lit = Math.min(5, Math.floor(m / 3));
+  $("#min").textContent = m;
+  const dots = $("#dots");
+  dots.textContent = "";
+  for (let i = 0; i < 5; i++) dots.append(Object.assign(document.createElement("i"), { className: i < lit ? "on" : "" }));
+  dots.setAttribute("aria-label", `今日打卡进度：五个点亮了 ${lit} 个`);
+  $("#state").textContent = m < 3 ? `再读 ${3 - m} 分钟，今天就算打卡了。` : m < 15 ? `今天已打卡。再读 ${15 - m} 分钟五个点全亮。` : "今天读满了。";
+  const cal = $("#cal");
+  cal.textContent = "";
+  days.concat([m]).forEach((d, i, arr) => {
+    const el = document.createElement("div");
+    el.dataset.l = Math.min(5, Math.floor(d / 3));
+    el.title = d + " 分钟";
+    if (i === arr.length - 1) el.className = "today";
+    cal.append(el);
+  });
+}
+$("#minutes").addEventListener("input", renderDaily);
+
+/* ---------------- 阅读地图 ---------------- */
+function renderMap() {
+  const map = $("#map");
+  map.textContent = "";
+  let litTotal = 0, minutesTotal = 0, districtsLit = 0;
+  DISTRICTS.forEach(name => {
+    const list = allBooks().filter(b => b.district === name);
+    const minutes = list.reduce((sum, b) => sum + b.minutes, 0);
+    const full = Math.min(TILES, Math.floor(minutes / 15)), half = full < TILES && minutes % 15 >= 3 ? 1 : 0;
+    litTotal += full; minutesTotal += minutes; if (full) districtsLit++;
+    const box = document.createElement("div");
+    box.className = "district" + (minutes ? "" : " dark");
+    const h = document.createElement("h3");
+    h.append(name, Object.assign(document.createElement("small"), { textContent: minutes ? `${full} / ${TILES} 格` : "还没读过" }));
+    const tiles = document.createElement("div");
+    tiles.className = "tiles";
+    tiles.setAttribute("role", "img");
+    tiles.setAttribute("aria-label", `${name}：点亮 ${full} 格，共 ${TILES} 格`);
+    for (let i = 0; i < TILES; i++) tiles.append(Object.assign(document.createElement("i"), { className: i < full ? "on" : i < full + half ? "half" : "" }));
+    const p = document.createElement("p");
+    p.textContent = list.length ? list.map(b => "《" + (clean(b.title) || "未命名") + "》").join("") : "";
+    box.append(h, tiles, p);
+    map.append(box);
+  });
+  const sum = $("#summary");
+  sum.textContent = "";
+  [[Math.floor(minutesTotal / 60) + " 小时 " + minutesTotal % 60 + " 分", "累计阅读"], [litTotal + " 格", "已点亮"], [districtsLit + " / " + DISTRICTS.length, "去过的分区"]]
+    .forEach(([big, small]) => { const d = document.createElement("div"); d.append(Object.assign(document.createElement("b"), { textContent: big }), Object.assign(document.createElement("span"), { textContent: small })); sum.append(d); });
+}
+$("#sim-day").addEventListener("click", () => {
+  const pool = allBooks();
+  const b = pool[Math.floor(Math.random() * pool.length)], m = [3, 6, 9, 15, 15, 18][Math.floor(Math.random() * 6)];
+  b.minutes += m;
+  days.push(m); days.shift();
+  renderMap(); renderDaily();
+});
+$("#reset").addEventListener("click", () => { books = structuredClone(SAMPLE_BOOKS); days = SAMPLE_DAYS.slice(); imported.forEach(b => b.minutes = 0); renderMap(); renderDaily(); });
+
+renderRows(); renderMock(); renderDaily(); renderMap();
+</script>
+</body>
+</html>

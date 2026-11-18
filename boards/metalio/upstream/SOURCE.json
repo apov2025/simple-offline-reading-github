@@ -1,0 +1,281 @@
+{
+  "repository": "https://github.com/CloudZao/Metalio-E-INK4-Plus",
+  "commit": "2e8501095eaf1980be0d6d8b7005d0ffeae505f7",
+  "files": [
+    {
+      "path": "display/epd_board.h",
+      "sha256": "7c0aa562d0990052fb6af8afc8cfd09b8fc169e4cc71a3d57449ce57d9a34a3a"
+    },
+    {
+      "path": "display/epd_board_common.c",
+      "sha256": "d487c98e08075cf624b28cb6a682fdc21545b0d9c198c2be7e38b3032f02800e"
+    },
+    {
+      "path": "display/highlevel.c",
+      "sha256": "d59dc49cdc76b7f51d724b7cfda7b38a47b6b67c207a9bf244d5412595a8032f"
+    },
+    {
+      "path": "display/epdiy_riscv_ve_stub.c",
+      "sha256": "e4ff810104f802280c49c8d92bf3811787d47900800ba5a568501edd799ba638"
+    },
+    {
+      "path": "display/epd_internals.h",
+      "sha256": "6cd965fe5e6a79d3afce8d98993adb6baff584b447e01f1c811ef3209550242f"
+    },
+    {
+      "path": "display/epd_board_metalio_eink4_plus.h",
+      "sha256": "8a40433fdfc504470fbdf5d8b3004d52d1580af8946b3d03dd72125fb3ad5caf"
+    },
+    {
+      "path": "display/epd_board_specific.h",
+      "sha256": "d13263a116330ee1362184f25fd0dec6acf4270410a541712d55420363429dd0"
+    },
+    {
+      "path": "display/font.c",
+      "sha256": "f4c5ef1f6db6187999ba1c78233a904cabcb7edf7bebadaedbfcf73bc96a02dd"
+    },
+    {
+      "path": "display/epdiy.c",
+      "sha256": "57f32184b042a957ae32be02af1da25fefe715abd2bfad0ef460b4d29ea5f465"
+    },
+    {
+      "path": "display/render.c",
+      "sha256": "93ffc59fbbc84727b177bd934de1a579204d5613c4d41413dd7fcf81b9950553"
+    },
+    {
+      "path": "display/board_specific.c",
+      "sha256": "948fa1fcacd3ee13fb89f11ab217e10a2765fc43fa368c803990abe5d87aad72"
+    },
+    {
+      "path": "display/epd_board_common.h",
+      "sha256": "194f9543e238b938be8dfa639459616e7dc99dcd674f160b5fbedaa12317e205"
+    },
+    {
+      "path": "display/epd_display.h",
+      "sha256": "98147673e6796fe0a02de3b4ded302d8ec8131bddf8ae9698ddbe9b3cacc5f6a"
+    },
+    {
+      "path": "display/epd_board.c",
+      "sha256": "3c4d8ee56cc5c9d68a24aeaa554abd238765d34466144dc533c6bf35ad5f4055"
+    },
+    {
+      "path": "display/displays.c",
+      "sha256": "4e52613b1965aa949685b247549b1b945dc23e5ffe08da10f2d3ef3fc1b28f2f"
+    },
+    {
+      "path": "display/epd_board_metalio_eink4_plus.c",
+      "sha256": "ca014b04cb9163bbe0c2fef0347a0484d51c51a04c78b0eb40b8232e405a7b22"
+    },
+    {
+      "path": "display/epdiy.h",
+      "sha256": "195fa20dab233503664e252d2d60cb59a8d1727c8ec72c39ba95b59ec4ad0492"
+    },
+    {
+      "path": "display/builtin_waveforms.c",
+      "sha256": "e786204b6cd8cf7d75f77ec1836c1ca1244c4d24e593b3a5496cbb9a4481024e"
+    },
+    {
+      "path": "display/render.h",
+      "sha256": "23ee5d45efa948b946f2cb430bda39062b547abb387d75cb3a1b1e4c8747c3f8"
+    },
+    {
+      "path": "display/epd_highlevel.h",
+      "sha256": "1e70c7d7f7119454a3f8d6ab004ae33a4f37c079805473216ede4d92fb6d2567"
+    },
+    {
+      "path": "display/waveforms/my_gray8_gl16.h",
+      "sha256": "8600568bfa941bb3e4e83f27945fc58e696340e913d3693c3a7778c9df2039ae"
+    },
+    {
+      "path": "display/waveforms/my_waveform_gc.h",
+      "sha256": "f8c7f1a79981f45025867461d2d7074859e343797fc5257fc4fe4740b07f497d"
+    },
+    {
+      "path": "display/waveforms/epdiy_ED097TC2.h",
+      "sha256": "70506a50c7c0f739f06b5da53fa1e2c3ef9746473deb203c618f2df9aac8c121"
+    },
+    {
+      "path": "display/waveforms/epdiy_ED060SC4.h",
+      "sha256": "52b9a676452a8b53466f42e55d15eb4466f95dc8a37e617a0ea232886bda1a43"
+    },
+    {
+      "path": "display/waveforms/epdiy_ED097OC4.h",
+      "sha256": "637d668ed8e15e3f429eb575cfcfcae74ace9552715e7556adf8be1e1fc378aa"
+    },
+    {
+      "path": "display/waveforms/my_waveform_trim.h",
+      "sha256": "5919e460faf9cd5ae23bb6df3e7b9f6f07bb1b0be3f6fad86c5ae6392d73445c"
+    },
+    {
+      "path": "display/waveforms/epdiy_NULL.h",
+      "sha256": "57504932bb5850ea79f2c6ac7aa0c8caa810d89150bd79e04008e5c412e89832"
+    },
+    {
+      "path": "display/waveforms/LICENSE.gray8",
+      "sha256": "b7147589048285d212950e284ba51bf31facb620764a7ea773129c76560c7cc0"
+    },
+    {
+      "path": "display/waveforms/my_waveform.c",
+      "sha256": "0fa7e582e74ca7d06d949ecdad819f9b74e8fbbdc1154959fc562ea31349bae8"
+    },
+    {
+      "path": "display/waveforms/epdiy_ED047TC2.h",
+      "sha256": "bf9eb98ee64df1c84802e505836c8e04081bbad9f8dbb7eb97412fc341e02e2a"
+    },
+    {
+      "path": "display/waveforms/epdiy_ED133UT2.h",
+      "sha256": "079008ab013bb62c42e57765d6c0e7112331d720eecd69bdb340c05e5607f170"
+    },
+    {
+      "path": "display/waveforms/my_waveform_gl.h",
+      "sha256": "4eb2e37f55ba66da714c20266e21af1b9d8d3a462fdb5058c0584d004f3923f5"
+    },
+    {
+      "path": "display/waveforms/epdiy_ED060XC3.h",
+      "sha256": "bba3c12357a9797dc528d8723cdca259d6e1131bda5607e4870d74ecffeb100f"
+    },
+    {
+      "path": "display/waveforms/my_waveform_du.h",
+      "sha256": "62ff83aeb2aae3048078f8d1c1d5bdcf24231b4b142d1893d566e64f496ee7db"
+    },
+    {
+      "path": "display/waveforms/epdiy_ED047TC1.h",
+      "sha256": "40ff2bcce909678fbb870039a7f72537daf0f3446e4c82342d37ef0abaef3e84"
+    },
+    {
+      "path": "display/waveforms/epdiy_ED060SCT.h",
+      "sha256": "64d50cdccbc63636c87df55567133d5a7b77475aed22e1e55b906c6eee4ac5e0"
+    },
+    {
+      "path": "display/waveforms/my_waveform.h",
+      "sha256": "43f73152147ce148ed723b4e4e290b9dde42697c4a8ba8ffb9220d331ffa84d2"
+    },
+    {
+      "path": "display/waveforms/my_gray8_gc16.h",
+      "sha256": "994e495774e1bee3c9afd3c74443fca785b5afd1e1d7834ed5e30b6661da26b3"
+    },
+    {
+      "path": "display/waveforms/my_waveform_trim.c",
+      "sha256": "96ac7e8ea3773166ca304ee2c0edb9dc4aa80d81f08a393a0c3c3c5daafad920"
+    },
+    {
+      "path": "display/output_lcd/epdiy_idf6_compat.h",
+      "sha256": "604452703c0f5c6e937e327081f60322521bc555e8452376517fefcd52e7f947"
+    },
+    {
+      "path": "display/output_lcd/render_lcd.c",
+      "sha256": "4634adb587c27cbae824576b9f96a20f6de7917919b3c7b05f44c7bc5afc7020"
+    },
+    {
+      "path": "display/output_lcd/lcd_driver.h",
+      "sha256": "00a034e86612acec5c80aba11124dd71f1af32f42ed2b2ac47a1236f01ffb2e0"
+    },
+    {
+      "path": "display/output_lcd/render_lcd.h",
+      "sha256": "471118d9a4657a68616d561adc43c48419524579c88121ab1119a4ceb4076b5d"
+    },
+    {
+      "path": "display/output_lcd/idf-4-backports.h",
+      "sha256": "2d9b5caabec4927f27dbd588ca1802ddb09c5da1ce155f55270a4432eef54a0c"
+    },
+    {
+      "path": "display/output_lcd/lcd_driver.c",
+      "sha256": "4484741c0a01530d6d2d37a2c28b988830c5130b0d88822e0ac2df9aed93227e"
+    },
+    {
+      "path": "display/output_common/line_queue.h",
+      "sha256": "70cd54837772807c88ed5c4e83c788adde5b6bd73dc1a0f3b568427603b581a5"
+    },
+    {
+      "path": "display/output_common/spatial_wipe.h",
+      "sha256": "5351b7e0ccb2a5a003840d65acabb8db306e60c49dc39176fa614703d56a69ce"
+    },
+    {
+      "path": "display/output_common/lut.c",
+      "sha256": "c296a4192e8dc8fdf80c4381cb6397be501c0e3f8de1b5f69af88392d554d45d"
+    },
+    {
+      "path": "display/output_common/white_border.h",
+      "sha256": "ad99e229dfc09fe0fe783b2e9f9c9e5c689942b424fe0db761265fa274cb3f1b"
+    },
+    {
+      "path": "display/output_common/render_context.h",
+      "sha256": "fb126a10401edf136069ce51d149429cde3877ca6927d0ff544d960a237f5521"
+    },
+    {
+      "path": "display/output_common/render_method.h",
+      "sha256": "195aee17880b3d9c0f35ada6e2ce7bae37ebd9ffe1d7f037a6ce6dfa275163f8"
+    },
+    {
+      "path": "display/output_common/line_queue.c",
+      "sha256": "f282e808d441212b66ad7d710e988d9287e962f27d19ffbdf6f489756c3ea881"
+    },
+    {
+      "path": "display/output_common/lut.S",
+      "sha256": "8aa056ac43479b777c5a27263809dc6846bebaeb8a3371b3dd755fd719427a62"
+    },
+    {
+      "path": "display/output_common/lut.h",
+      "sha256": "9f503986411c14d0eb69948f64eef78259ba25464279f199e1f834f237930c45"
+    },
+    {
+      "path": "display/output_common/render_method.c",
+      "sha256": "54c172369f09d58c19f08317c505b443b7f43add5f74d18ccc69f11874a262e8"
+    },
+    {
+      "path": "display/output_common/render_context.c",
+      "sha256": "cf0999a0bbf3d342dc8e736042faa75436fc7ecbcbe7c795966ca22b14da5723"
+    },
+    {
+      "path": "bus/pca9555.h",
+      "sha256": "a952ad0b4fca46a4a08a6582b78cde7d45f86ad832e07587c1c8716e293632fb"
+    },
+    {
+      "path": "bus/tps65185.c",
+      "sha256": "3f59831d117878f699d6ef99647a2524fc42aa12184615fa3390032b6515b5b3"
+    },
+    {
+      "path": "bus/metalio_i2c1.h",
+      "sha256": "de6ef29b3e946004e104f150933d7f295bf2f1499ed4b0c17c9d775a6491bb20"
+    },
+    {
+      "path": "bus/tps65185.h",
+      "sha256": "a42f21fb1aaeff5df91a8803f0db7cf4687ff8624d3acf4b96433b9aa9842880"
+    },
+    {
+      "path": "bus/pca9555.c",
+      "sha256": "84c7d6dd5197f00e0fd3a064fadba6690160e55dafd7cac4c9ca9a70df65c159"
+    },
+    {
+      "path": "bus/metalio_i2c1.c",
+      "sha256": "ad1259ef4b810b117b0f8bc5225990a95509c558eb5220df9a57f3a2b8cfaa44"
+    },
+    {
+      "path": "s31_sleep/s31_sleep_sdk.cmake",
+      "source": "main/boards/common/power_policy/s31_sleep/s31_sleep_sdk.cmake",
+      "sha256": "90d2190a5ac0cfae52b6f95353d90afeea978c79bf733d1fe6d83ffe6d74c927"
+    },
+    {
+      "path": "s31_sleep/s31_sleep.h",
+      "source": "main/boards/common/power_policy/s31_sleep/s31_sleep.h",
+      "sha256": "1152739f5877be85ae420554f8448e80def89ccd32357075710a7539a60e581e"
+    },
+    {
+      "path": "s31_sleep/s31_sleep.cc",
+      "source": "main/boards/common/power_policy/s31_sleep/s31_sleep.cc",
+      "sha256": "19c95fe1dae79878c54290baf86b8d35b6e651342627a4a363805c9f60cfc721"
+    }
+  ],
+  "local_patches": [
+    {
+      "path": "s31_sleep/s31_sleep.cc",
+      "description": "Split chained volatile zero assignments into separate statements for GCC 15 / C++23; behavior unchanged.",
+      "local_sha256": "ac65c4a08a9641718979c29f6b556ee9f28d5bda22f834c0ee925d7f83bc78c9"
+    },
+    {
+      "path": "display/epd_board_metalio_eink4_plus.c",
+      "description": "Preload USB route output before enabling it; release retained pad only after configuration and hold the serial route across host resets. Fixes initialization low pulse. Actual connected boot validation pending.",
+      "local_sha256": "c745143040f8f16d90e7a462d981bdef231a906584200280fd19f33d57d3b49d"
+    }
+  ]
+}
