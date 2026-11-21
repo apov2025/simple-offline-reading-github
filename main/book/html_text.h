@@ -42,3 +42,14 @@ esp_err_t html_to_blocks(const char* html, size_t len, html_text_t* out);
 void html_text_free(html_text_t* text);
 /// 释放块表及其图片，不释放正文；可传 NULL。/ Free blocks and their images without freeing text; NULL is allowed.
 void html_blocks_free(blk_t* blocks, size_t count);
+
+/// 使用相同文本转换规则定位 id 或旧式 a name；失败不改 offset，无资源访问。/ Resolve id or legacy a name using the same text conversion; failure preserves offset, with no resource access.
+esp_err_t html_anchor_offset(const char *html, size_t len, const char *anchor, size_t *offset);
+
+/// 一次转换的锚点查询；name 借用，成功时缺失的 offset 为 SIZE_MAX。/ Batched anchor query; name is borrowed, missing offsets become SIZE_MAX on success.
+typedef struct {
+    const char *name; ///< 区分大小写的 id 或 a name / Case-sensitive id or a name
+    size_t offset; ///< 转换后的 UTF-8 字节位置 / Converted UTF-8 byte position
+} html_anchor_t;
+/// 单遍转换解析至多 32768 个锚点；失败保留所有输出，无资源访问。/ Resolve at most 32768 anchors in one conversion; preserve outputs on failure, with no resource access.
+esp_err_t html_anchor_offsets(const char *html, size_t len, html_anchor_t *anchors, size_t count);

@@ -28,17 +28,27 @@
 #define EPUB_ID_CAP 128
 #define EPUB_TITLE_CAP 160
 #define EPUB_ENTRY_MAX (2u * 1024u * 1024u)
+#define TOC_OFFSET_UNKNOWN UINT32_MAX
+#define TOC_OFFSET_MISSING (UINT32_MAX - 1u)
 
 typedef struct {
     int zip_index; ///< ZIP 条目 / ZIP entry
     uint32_t offset; ///< spine 累计原始字节 / Cumulative source bytes in spine
     char *title; ///< 按实际长度保存标题，NULL 使用默认名称 / Actual-length title, NULL uses a default name
     int next; ///< 相同 ZIP 路径的下一章节 / Next chapter sharing the ZIP path
+    uint32_t toc_first; ///< 首个目录索引加一，零表示无目录 / First TOC index plus one, zero if absent
 } chapter_t;
+typedef struct {
+    char *label, *fragment; ///< 有界字符串 / Bounded strings
+    uint16_t chapter, depth; ///< 原章节与目录层级 / Original chapter and navigation depth
+    uint32_t offset, next; ///< 缓存正文位置与同章下一索引加一 / Cached body position and next same-chapter index plus one
+} toc_t;
 struct book_epub {
     zip_reader_t *zip; ///< ZIP 所有权 / ZIP ownership
     chapter_t *chapters; ///< 按实际章节数分配的 PSRAM 表 / PSRAM table sized to actual chapter count
     int *heads; ///< ZIP 索引到章节链 / ZIP index to chapter chain
+    toc_t *toc; ///< 独立导航索引 / Independent navigation index
+    size_t toc_count, toc_cap, toc_bytes; ///< 有界目录分配 / Bounded navigation allocation
     size_t title_bytes; ///< 标题内存预算 / Title memory budget
     uint16_t *image_first; ///< 按 ZIP 索引记录本次已读的最早图片章节 / Earliest visited image chapter by ZIP index during this opening
     uint8_t *title_images; ///< 标题图 ZIP 索引位图，避免重新读取图片比较 / Bitmap of title-image ZIP indices without rereading pixels for comparison
@@ -463,8 +473,58 @@ static void assign_title(book_epub_t *book, const char *base, const char *href, 
         memcpy(copy, title, n + 1); book->chapters[i].title = copy; book->title_bytes += n + 1;
     }
 }
+static void toc_clear(book_epub_t *book) {
+    for (size_t i = 0; i < book->toc_count; ++i) { free(book->toc[i].label); free(book->toc[i].fragment); }
+    free(book->toc); book->toc = NULL;
+    book->toc_count = book->toc_cap = book->toc_bytes = 0;
+}
+static esp_err_t toc_slot(book_epub_t *book, size_t *slot) {
+    if (book->toc_count == EPUB_ITEMS_MAX) return ESP_ERR_INVALID_SIZE;
+    if (book->toc_count == book->toc_cap) {
+        size_t cap = book->toc_cap ? book->toc_cap * 2 : 32;
+        toc_t *entries = heap_caps_realloc(book->toc, cap * sizeof(*entries), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!entries) return ESP_ERR_NO_MEM;
+        book->toc = entries; book->toc_cap = cap;
+    }
+    *slot = book->toc_count++;
+    book->toc[*slot] = (toc_t){0}; return ESP_OK;
+}
+static bool fragment_decode(const char *href, char out[EPUB_PATH_CAP]) {
+    const char *p = strchr(href, '#'); size_t used = 0; out[0] = 0;
+    if (!p) return true;
+    for (++p; *p; ++p) {
+        unsigned char c = (unsigned char)*p;
+        if (c == '%') {
+            if (!p[1] || !p[2] || hex(p[1]) < 0 || hex(p[2]) < 0) return false;
+            c = (unsigned char)((hex(p[1]) << 4) | hex(p[2])); p += 2;
+        }
+        if (c < 32 || c == 127 || used + 1 >= EPUB_PATH_CAP) return false;
+        out[used++] = (char)c;
+    }
+    out[used] = 0;
+    for (size_t i = 0; i < used;) { uint32_t cp; size_t n = utf8_read(out + i, used - i, &cp); if (!n) return false; i += n; }
+    return true;
+}
+static esp_err_t toc_assign(book_epub_t *book, size_t slot, unsigned depth, const char *base, const char *href, char *title) {
+    size_t n = strlen(title); while (n && title[n - 1] == ' ') title[--n] = 0;
+    char path[EPUB_PATH_CAP], fragment[EPUB_PATH_CAP];
+    if (!n || !href[0] || !resolve_path(base, href, path) || !fragment_decode(href, fragment)) return ESP_OK;
+    int z = zip_find(book->zip, path); if (z < 0 || book->heads[z] < 0) return ESP_OK;
+    int chapter = book->heads[z];
+    while (book->chapters[chapter].next >= 0) chapter = book->chapters[chapter].next;
+    size_t f = strlen(fragment), bytes = n + 1 + (f ? f + 1 : 0);
+    if (bytes > 1024u * 1024u - book->toc_bytes) return ESP_ERR_INVALID_SIZE;
+    toc_t *entry = &book->toc[slot];
+    entry->label = psram(n + 1);
+    if (!entry->label) return ESP_ERR_NO_MEM;
+    memcpy(entry->label, title, n + 1);
+    if (f) { entry->fragment = psram(f + 1); if (!entry->fragment) return ESP_ERR_NO_MEM; memcpy(entry->fragment, fragment, f + 1); }
+    entry->chapter = (uint16_t)chapter; entry->depth = (uint16_t)depth; book->toc_bytes += bytes;
+    return ESP_OK;
+}
 typedef struct {
     size_t depth, label_depth; ///< 节点与标签深度 / Node and label depths
+    size_t slot; unsigned level; ///< 导航顺序与层级 / Navigation order and level
     char href[EPUB_PATH_CAP]; ///< 内容目标 / Content target
     char title[EPUB_TITLE_CAP]; ///< 当前节点标题 / Current node title
 } nav_node_t;
@@ -475,17 +535,29 @@ static esp_err_t navigation_parse(book_epub_t *book, const char *path, bool ncx)
     if (!nodes) { free(text); return ESP_ERR_NO_MEM; }
     unsigned char previously_titled[EPUB_ITEMS_MAX / 8] = {0};
     for (size_t i = 0; i < book->count; ++i) if (book->chapters[i].title) previously_titled[i / 8] |= (unsigned char)(1u << (i % 8));
+    bool capture = book->toc_count == 0;
     size_t count = 0, toc_depth = 0; xml_t xml; xml_reader(&xml, text, len); token_t t;
     while (xml_next(&xml, &t)) {
+        if (t.kind == XML_OPEN && t.depth == 1 && !local_name(t.name, ncx ? "ncx" : "html")) { xml.failed = true; break; }
+        if (ncx && t.kind == XML_OPEN && !t.empty && local_name(t.name, "navMap")) toc_depth = t.depth;
         if (!ncx && t.kind == XML_OPEN && local_name(t.name, "nav")) {
             char type[128]; if (!attribute(t, "epub:type", type, sizeof(type))) { xml.failed = true; break; }
             if (!t.empty && word(type, "toc")) toc_depth = t.depth;
         }
-        if (!ncx && t.kind == XML_CLOSE && t.depth == toc_depth) toc_depth = 0;
-        bool node_open = t.kind == XML_OPEN && (ncx ? local_name(t.name, "navPoint") : toc_depth && local_name(t.name, "a"));
+        if (t.kind == XML_CLOSE && t.depth == toc_depth) toc_depth = 0;
+        bool node_open = t.kind == XML_OPEN && toc_depth && (ncx ? local_name(t.name, "navPoint") : local_name(t.name, "a"));
         if (node_open) {
             if (count == EPUB_XML_DEPTH) { xml.failed = true; break; }
             nav_node_t *node = &nodes[count++]; memset(node, 0, sizeof(*node)); node->depth = t.depth;
+            if (capture) {
+                err = toc_slot(book, &node->slot); if (err != ESP_OK) { xml.failed = true; break; }
+                node->level = (unsigned)count - 1;
+                if (!ncx) {
+                    unsigned lists = 0;
+                    for (size_t d = toc_depth; d < xml.depth; ++d) if (local_name(xml.stack[d], "li")) ++lists;
+                    node->level = lists ? lists - 1 : 0;
+                }
+            }
             if (!ncx) { node->label_depth = t.depth; if (!attribute(t, "href", node->href, sizeof(node->href))) { xml.failed = true; break; } }
             if (t.empty) --count;
             continue;
@@ -500,16 +572,25 @@ static esp_err_t navigation_parse(book_epub_t *book, const char *path, bool ncx)
         }
         if (t.kind == XML_CLOSE && t.depth == node->label_depth) node->label_depth = 0;
         if (t.kind == XML_CLOSE && t.depth == node->depth) {
-            assign_title(book, path, node->href, node->title); --count;
+            assign_title(book, path, node->href, node->title);
+            if (capture) { err = toc_assign(book, node->slot, node->level, path, node->href, node->title); if (err != ESP_OK) { xml.failed = true; break; } }
+            --count;
         }
     }
     if (xml.failed) {
+        if (capture) toc_clear(book);
         err = ESP_ERR_INVALID_ARG;
         // 损坏目录不留下部分命名，确保备用目录可完整接管。/ A broken TOC leaves no partial labels so fallback navigation can take over fully.
         for (size_t i = 0; i < book->count; ++i) if (!(previously_titled[i / 8] & (1u << (i % 8)))) {
             if (book->chapters[i].title) book->title_bytes -= strlen(book->chapters[i].title) + 1;
             free(book->chapters[i].title); book->chapters[i].title = NULL;
         }
+    }
+    if (capture && !xml.failed) {
+        size_t kept = 0;
+        for (size_t i = 0; i < book->toc_count; ++i) if (book->toc[i].label) book->toc[kept++] = book->toc[i];
+        book->toc_count = kept;
+        if (!kept) toc_clear(book);
     }
     free(nodes); free(text); return err;
 }
@@ -543,6 +624,12 @@ esp_err_t book_epub_open(const char *path, book_epub_t **out) {
         // 导航损坏不阻止阅读；NAV 补全 NCX 未命中的章节。/ Broken navigation never blocks reading; NAV fills chapters not named by NCX.
         if (ncx[0]) (void)navigation_parse(book, ncx, true);
         if (nav[0]) (void)navigation_parse(book, nav, false);
+    }
+    for (size_t i = book->toc_count; i > 0; --i) {
+        toc_t *entry = &book->toc[i - 1];
+        chapter_t *chapter = &book->chapters[entry->chapter];
+        entry->offset = entry->fragment ? TOC_OFFSET_UNKNOWN : 0;
+        entry->next = chapter->toc_first; chapter->toc_first = (uint32_t)i;
     }
     free(book->heads); book->heads = NULL;
     free(paths);
@@ -618,6 +705,7 @@ esp_err_t book_epub_read_file(const char *path, const char *name, size_t len, ui
 void book_epub_close(book_epub_t *book) {
     if (!book) return;
     if (book->chapters) for (size_t i = 0; i < book->count; ++i) free(book->chapters[i].title);
+    toc_clear(book);
     zip_close(book->zip); free(book->heads); free(book->chapters); free(book->image_first); free(book->title_images); free(book);
 }
 size_t book_epub_chapter_count(const book_epub_t *book) { return book ? book->count : 0; }
@@ -696,3 +784,90 @@ esp_err_t book_epub_load_image(book_epub_t *book, size_t i, const char *referenc
 }
 uint32_t book_epub_total_bytes(const book_epub_t *book) { return book ? book->total : 0; }
 uint32_t book_epub_chapter_byte_offset(const book_epub_t *book, size_t i) { return book && i < book->count ? book->chapters[i].offset : 0; }
+
+size_t book_epub_toc_count(const book_epub_t *book) { return book ? (book->toc_count ? book->toc_count : book->count) : 0; }
+esp_err_t book_epub_toc_get(const book_epub_t *book, size_t index, book_toc_entry_t *out) {
+    if (!book || !out || index >= book_epub_toc_count(book)) return ESP_ERR_INVALID_ARG;
+    book_toc_entry_t entry = {0};
+    if (book->toc_count) {
+        const toc_t *toc = &book->toc[index];
+        memcpy(entry.title, toc->label, strlen(toc->label) + 1);
+        entry.depth = toc->depth; entry.chapter = toc->chapter;
+    } else {
+        entry.chapter = index;
+        esp_err_t err = book_epub_chapter_title(book, index, entry.title, sizeof(entry.title));
+        if (err != ESP_OK) return err;
+    }
+    *out = entry; return ESP_OK;
+}
+// 同章所有片段只读一次、转换一次；仅成功后提交缓存，不经过已读图片登记。
+// Read and convert all fragments in a chapter once; commit the cache only on success, bypassing image-visit registration.
+static esp_err_t toc_cache_chapter(book_epub_t *book, size_t chapter) {
+    size_t count = 0;
+    for (uint32_t link = book->chapters[chapter].toc_first; link; link = book->toc[link - 1].next)
+        if (book->toc[link - 1].offset == TOC_OFFSET_UNKNOWN) ++count;
+    if (!count) return ESP_OK;
+    html_anchor_t *queries = psram(count * sizeof(*queries));
+    if (!queries) return ESP_ERR_NO_MEM;
+    size_t at = 0;
+    for (uint32_t link = book->chapters[chapter].toc_first; link; link = book->toc[link - 1].next)
+        if (book->toc[link - 1].offset == TOC_OFFSET_UNKNOWN)
+            queries[at++] = (html_anchor_t){.name = book->toc[link - 1].fragment};
+    char *html = NULL; size_t len = 0;
+    esp_err_t err = load_entry(book, book->chapters[chapter].zip_index, &html, &len);
+    if (err == ESP_OK) err = html_anchor_offsets(html, len, queries, count);
+    if (err == ESP_OK) {
+        at = 0;
+        for (uint32_t link = book->chapters[chapter].toc_first; link; link = book->toc[link - 1].next) {
+            toc_t *entry = &book->toc[link - 1];
+            if (entry->offset != TOC_OFFSET_UNKNOWN) continue;
+            size_t offset = queries[at++].offset;
+            entry->offset = offset == SIZE_MAX ? TOC_OFFSET_MISSING : (uint32_t)offset;
+        }
+    }
+    free(html); free(queries); return err;
+}
+
+esp_err_t book_epub_toc_resolve(book_epub_t *book, size_t index, size_t *chapter, size_t *offset) {
+    if (!book || !chapter || !offset || index >= book_epub_toc_count(book)) return ESP_ERR_INVALID_ARG;
+    size_t target = book->toc_count ? book->toc[index].chapter : index, position = 0;
+    if (book->toc_count && book->toc[index].fragment) {
+        esp_err_t err = toc_cache_chapter(book, target);
+        if (err != ESP_OK) return err;
+        if (book->toc[index].offset == TOC_OFFSET_MISSING) return ESP_ERR_NOT_FOUND;
+        position = book->toc[index].offset;
+    }
+    *chapter = target; *offset = position; return ESP_OK;
+}
+
+static size_t toc_chapter_position(const book_epub_t *book, size_t chapter, size_t offset, bool preceding) {
+    size_t selected = SIZE_MAX;
+    for (uint32_t link = book->chapters[chapter].toc_first; link; link = book->toc[link - 1].next) {
+        const toc_t *entry = &book->toc[link - 1];
+        if (entry->offset >= TOC_OFFSET_MISSING || (preceding && entry->offset > offset)) continue;
+        const toc_t *best = selected == SIZE_MAX ? NULL : &book->toc[selected];
+        if (!best || (preceding ? entry->offset > best->offset : entry->offset < best->offset) ||
+            (entry->offset == best->offset && entry->depth > best->depth)) selected = link - 1;
+    }
+    return selected;
+}
+
+esp_err_t book_epub_toc_current(book_epub_t *book, size_t chapter, size_t offset, size_t *index) {
+    if (!book || !index || chapter >= book->count) return ESP_ERR_INVALID_ARG;
+    if (!book->toc_count) { *index = chapter; return ESP_OK; }
+    // 先向前找最近已到达的位置；没有时向后取首个可用位置。同位置优先深层，再保留最早行。
+    // Find the nearest reached position first, otherwise the first upcoming one; ties prefer deeper entries then the earliest row.
+    for (size_t c = chapter + 1; c > 0; --c) {
+        esp_err_t err = toc_cache_chapter(book, c - 1);
+        if (err != ESP_OK) return err;
+        size_t selected = toc_chapter_position(book, c - 1, c - 1 == chapter ? offset : SIZE_MAX, true);
+        if (selected != SIZE_MAX) { *index = selected; return ESP_OK; }
+    }
+    for (size_t c = chapter; c < book->count; ++c) {
+        esp_err_t err = toc_cache_chapter(book, c);
+        if (err != ESP_OK) return err;
+        size_t selected = toc_chapter_position(book, c, 0, false);
+        if (selected != SIZE_MAX) { *index = selected; return ESP_OK; }
+    }
+    return ESP_ERR_NOT_FOUND;
+}

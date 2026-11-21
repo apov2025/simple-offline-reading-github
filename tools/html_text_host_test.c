@@ -91,6 +91,34 @@ int main(void) {
         assert(!t.utf8 && !t.blocks);
     }
     html_test_fail_after = -1;
+    const char *anchored = "<p>甲</p><p id='节&amp;二'> B <a name='inline'/>中</p><i id='end'/>";
+    size_t offset = 999;
+    assert(html_anchor_offset(anchored, strlen(anchored), "节&二", &offset) == ESP_OK && offset == 4);
+    assert(html_anchor_offset(anchored, strlen(anchored), "inline", &offset) == ESP_OK && offset == 6);
+    assert(html_anchor_offset(anchored, strlen(anchored), "end", &offset) == ESP_OK && offset == 9);
+    offset = 999;
+    assert(html_anchor_offset(anchored, strlen(anchored), "missing", &offset) != ESP_OK && offset == 999);
+    for (int i = 0; i < 3; ++i) {
+        html_test_fail_after = i; offset = 999;
+        assert(html_anchor_offset("<p id='x'>text</p>", strlen("<p id='x'>text</p>"), "x", &offset) != ESP_OK && offset == 999);
+    }
+    html_test_fail_after = -1;
+    html_anchor_t queries[] = {{"inline", 999}, {"end", 999}, {"节&二", 999}, {"inline", 999}, {"missing", 999}};
+    assert(html_anchor_offsets(anchored, strlen(anchored), queries, 5) == ESP_OK);
+    assert(queries[0].offset == 6 && queries[1].offset == 9 && queries[2].offset == 4);
+    assert(queries[3].offset == 6 && queries[4].offset == SIZE_MAX);
+    const char *duplicates = "<p>A <i id='x'/><a name='y'/><b id='x'/> B</p><p id='x'>C</p>";
+    html_anchor_t pairs[] = {{"x", 999}, {"y", 999}};
+    assert(html_anchor_offsets(duplicates, strlen(duplicates), pairs, 2) == ESP_OK);
+    assert(pairs[0].offset == 2 && pairs[1].offset == 2);
+    bool complete = false;
+    for (int fail = 0; fail < 20; ++fail) {
+        pairs[0].offset = pairs[1].offset = 999; html_test_fail_after = fail;
+        esp_err_t err = html_anchor_offsets(duplicates, strlen(duplicates), pairs, 2);
+        if (err == ESP_OK) { complete = true; break; }
+        assert(err == ESP_ERR_NO_MEM && pairs[0].offset == 999 && pairs[1].offset == 999);
+    }
+    assert(complete); html_test_fail_after = -1;
     html_text_free(&t);
     puts("html_text_host_test: PASS");
 }

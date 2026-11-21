@@ -43,6 +43,9 @@ static uint8_t s_book_px = 48;
 static bool s_book_shake;
 static uint8_t s_reader_refresh = APP_READER_REFRESH_FAST;
 static bool s_font_picked;
+#if !READER_METALIO
+static char s_wallpaper[2][96];
+#endif
 static uint8_t s_light_level;
 static uint8_t s_light_warmth = 1;
 
@@ -90,6 +93,12 @@ void app_settings_init(void) {
     uint8_t light = 0, warmth = 1;
     if (nvs_get_u8(h, "fl_level", &light) == ESP_OK && light <= 3) s_light_level = light;
     if (nvs_get_u8(h, "fl_warmth", &warmth) == ESP_OK && warmth <= 2) s_light_warmth = warmth;
+#if !READER_METALIO
+    for(int i=0;i<2;i++) {
+        size_t length=sizeof(s_wallpaper[i]);
+        if(nvs_get_str(h,i?"wp_off":"wp_lock",s_wallpaper[i],&length)!=ESP_OK)s_wallpaper[i][0]=0;
+    }
+#endif
     nvs_close(h);
     ESP_LOGI(
         TAG, "sleep mode %s, font %s",
@@ -225,3 +234,18 @@ void app_settings_set_light(uint8_t level, uint8_t warmth) {
     s_light_level = level;
     s_light_warmth = warmth;
 }
+
+#if !READER_METALIO
+const char *app_settings_wallpaper_last(bool off) { return s_wallpaper[off]; }
+bool app_settings_set_wallpaper_last(bool off,const char *name) {
+    if(!name || strlen(name)>=sizeof(s_wallpaper[off]) || strchr(name,'/'))return false;
+    if(!strcmp(name,s_wallpaper[off]))return true;
+    nvs_handle_t h;if(nvs_open(NVS_NS,NVS_READWRITE,&h)!=ESP_OK)return false;
+    esp_err_t error=nvs_set_str(h,off?"wp_off":"wp_lock",name);
+    if(error==ESP_OK)error=nvs_commit(h);
+    nvs_close(h);
+    if(error!=ESP_OK)return false;
+    strcpy(s_wallpaper[off],name);return true;
+}
+
+#endif

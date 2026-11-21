@@ -17,9 +17,16 @@
 #define PSRAM_CAPS (MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)
 
 typedef struct {
+    const char *name;
+    size_t index, offset, next;
+} anchor_query_t;
+
+typedef struct {
     html_text_t text;
     size_t text_cap, block_cap, start;
     bool active, heading, block_heading, space;
+    anchor_query_t *anchors;
+    size_t anchor_count, anchor_pending;
 } writer_t;
 
 static unsigned char lower(unsigned char c) {
@@ -114,6 +121,11 @@ static esp_err_t emit(writer_t* w, uint32_t cp) {
         w->block_heading = w->heading;
     } else if (w->space) w->text.utf8[w->text.len++] = ' ';
     w->space = false;
+    // 分隔符和折叠空白先落地，锚点指向下一可见标量。/ Emit separators and collapsed spaces before locating the next visible scalar.
+    while (w->anchor_pending) {
+        anchor_query_t *query = &w->anchors[w->anchor_pending - 1];
+        query->offset = w->text.len; w->anchor_pending = query->next;
+    }
     memcpy(w->text.utf8 + w->text.len, bytes, n);
     w->text.len += n;
     return ESP_OK;
@@ -183,9 +195,9 @@ static bool image_tag(const char* name) {
     return name_equal(name, "img") || name_equal(name, "image");
 }
 
-// 只保留有界引用；资源解析由 EPUB 后端处理，不在 HTML 转换器内打开文件。
-// Retain a bounded reference only; EPUB resolves resources without file access in the HTML converter.
-static char* image_source(const char* attrs, size_t len) {
+// 只提取有界属性；key 为空时取图片引用，不在 HTML 转换器内访问资源。
+// Extract bounded attributes; a NULL key selects image references, without accessing resources here.
+static char* attribute_value(const char* attrs, size_t len, const char *key, esp_err_t *error) {
     size_t at = 0;
     while (at < len) {
         while (at < len && ascii_space((unsigned char)attrs[at])) ++at;
@@ -193,7 +205,7 @@ static char* image_source(const char* attrs, size_t len) {
         while (at < len && name_char((unsigned char)attrs[at])) ++at;
         if (at == start) break;
         size_t name_len = at - start;
-        bool wanted = (name_len == 3 && !memcmp(attrs + start, "src", 3)) ||
+        bool wanted = key ? (name_len == strlen(key) && !memcmp(attrs + start, key, name_len)) : (name_len == 3 && !memcmp(attrs + start, "src", 3)) ||
                       (name_len == 4 && !memcmp(attrs + start, "href", 4)) ||
                       (name_len == 10 && !memcmp(attrs + start, "xlink:href", 10));
         while (at < len && ascii_space((unsigned char)attrs[at])) ++at;
@@ -220,17 +232,37 @@ static char* image_source(const char* attrs, size_t len) {
         if (!used) return NULL;
         char* result = heap_caps_realloc(NULL, used + 1, PSRAM_CAPS);
         if (result) { memcpy(result, value, used); result[used] = 0; }
+        else if (error) *error = ESP_ERR_NO_MEM;
         return result;
     }
     return NULL;
 }
 
-esp_err_t html_to_blocks(const char* html, size_t len, html_text_t* out) {
+// 二分查找待查名称；同名查询共享首次出现的位置。/ Binary-search requested names; duplicate queries share the first occurrence.
+static void anchor_match(writer_t *w, const char *name) {
+    if (!name) return;
+    size_t lo = 0, hi = w->anchor_count;
+    while (lo < hi) {
+        size_t mid = lo + (hi - lo) / 2;
+        if (strcmp(w->anchors[mid].name, name) < 0) lo = mid + 1;
+        else hi = mid;
+    }
+    while (lo < w->anchor_count && !strcmp(w->anchors[lo].name, name)) {
+        anchor_query_t *query = &w->anchors[lo];
+        if (query->offset == SIZE_MAX) {
+            query->offset = SIZE_MAX - 1;
+            query->next = w->anchor_pending; w->anchor_pending = lo + 1;
+        }
+        ++lo;
+    }
+}
+
+static esp_err_t convert(const char* html, size_t len, html_text_t* out, anchor_query_t *anchors, size_t count) {
     if (!out) return ESP_ERR_INVALID_ARG;
     *out = (html_text_t){0};
     if (!html && len) return ESP_ERR_INVALID_ARG;
     if (len > HTML_TEXT_MAX_BYTES) return ESP_ERR_INVALID_SIZE;
-    writer_t w = {0};
+    writer_t w = {.anchors = anchors, .anchor_count = count};
     esp_err_t err = ESP_OK;
     char skip[16] = "";
     bool resume_head = false;
@@ -279,6 +311,17 @@ esp_err_t html_to_blocks(const char* html, size_t len, html_text_t* out) {
                     } else skip[0] = 0;
                     continue;
                 }
+                if (count && !closing && !declaration &&
+                    !name_equal(name, "head") && !name_equal(name, "style") && !name_equal(name, "script")) {
+                    char *id = attribute_value(html + at, end - at, "id", &err);
+                    if (!id && err == ESP_OK) id = attribute_value(html + at, end - at, "xml:id", &err);
+                    anchor_match(&w, id); free(id);
+                    if (name_equal(name, "a") && err == ESP_OK) {
+                        id = attribute_value(html + at, end - at, "name", &err);
+                        anchor_match(&w, id); free(id);
+                    }
+                    if (err != ESP_OK) goto fail;
+                }
                 if (!closing && !self_closing && (name_equal(name, "head") || name_equal(name, "style") || name_equal(name, "script"))) {
                     memcpy(skip, name, sizeof(skip));
                 } else if (!closing && image_tag(name)) {
@@ -298,7 +341,7 @@ esp_err_t html_to_blocks(const char* html, size_t len, html_text_t* out) {
                     }
                     err = finish_block(&w);
                     if (err != ESP_OK) goto fail;
-                    w.text.blocks[w.text.count - 1].image_src = image_source(html + at, end - at);
+                    w.text.blocks[w.text.count - 1].image_src = attribute_value(html + at, end - at, NULL, NULL);
                     w.heading = heading;
                 } else if (block_tag(name)) {
                     err = finish_block(&w);
@@ -321,9 +364,44 @@ esp_err_t html_to_blocks(const char* html, size_t len, html_text_t* out) {
     if (err == ESP_OK) err = reserve_text(&w, 0);
     if (err != ESP_OK) goto fail;
     w.text.utf8[w.text.len] = 0;
+    while (w.anchor_pending) {
+        anchor_query_t *query = &w.anchors[w.anchor_pending - 1];
+        query->offset = w.text.len; w.anchor_pending = query->next;
+    }
     *out = w.text;
     return ESP_OK;
 fail:
     html_text_free(&w.text);
+    return err;
+}
+
+esp_err_t html_to_blocks(const char *html, size_t len, html_text_t *out) {
+    return convert(html, len, out, NULL, 0);
+}
+static int anchor_compare(const void *left, const void *right) {
+    return strcmp(((const anchor_query_t *)left)->name, ((const anchor_query_t *)right)->name);
+}
+esp_err_t html_anchor_offsets(const char *html, size_t len, html_anchor_t *anchors, size_t count) {
+    if ((!anchors && count) || count > 32768u) return ESP_ERR_INVALID_ARG;
+    if (!count) return ESP_OK;
+    for (size_t i = 0; i < count; ++i)
+        if (!anchors[i].name || !*anchors[i].name) return ESP_ERR_INVALID_ARG;
+    anchor_query_t *queries = heap_caps_realloc(NULL, count * sizeof(*queries), PSRAM_CAPS);
+    if (!queries) return ESP_ERR_NO_MEM;
+    for (size_t i = 0; i < count; ++i)
+        queries[i] = (anchor_query_t){.name = anchors[i].name, .index = i, .offset = SIZE_MAX};
+    qsort(queries, count, sizeof(*queries), anchor_compare);
+    html_text_t text = {0};
+    esp_err_t err = convert(html, len, &text, queries, count);
+    if (err == ESP_OK)
+        for (size_t i = 0; i < count; ++i) anchors[queries[i].index].offset = queries[i].offset;
+    html_text_free(&text); free(queries); return err;
+}
+esp_err_t html_anchor_offset(const char *html, size_t len, const char *anchor, size_t *offset) {
+    if (!anchor || !*anchor || !offset) return ESP_ERR_INVALID_ARG;
+    html_anchor_t query = {.name = anchor};
+    esp_err_t err = html_anchor_offsets(html, len, &query, 1);
+    if (err == ESP_OK && query.offset == SIZE_MAX) return ESP_ERR_NOT_FOUND;
+    if (err == ESP_OK) *offset = query.offset;
     return err;
 }

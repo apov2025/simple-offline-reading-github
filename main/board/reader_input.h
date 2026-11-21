@@ -8,6 +8,10 @@
 #define READER_METALIO 0
 #endif
 #define READER_TOUCH_MAX_POINTS 2
+// 产品页面共用的三键编号，不依赖演示菜单。/ Shared product key IDs, independent of demo menus.
+#define UI_KEY_1 0
+#define UI_KEY_2 1
+#define UI_KEY_3 2
 #if READER_METALIO
 #include "esp_err.h"
 typedef void* reader_touch_handle_t;

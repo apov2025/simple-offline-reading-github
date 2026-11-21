@@ -151,3 +151,7 @@ int main(void){
     reset();assert(app_enter_host_sleep(APP_SLEEP_DEEP)==ESP_ERR_NOT_SUPPORTED && pulses==0);
     puts("Metalio sleep: pending/held key, shared IRQ, I2C/wake errors, busy card and lifecycle order PASS");
 }
+
+// 宿主测试混用 Pico 主循环对象；无名生产主循环不依赖此查询。
+// The host harness links the Pico loop; the Metalio production loop has no such dependency.
+bool app_lock_has_image(void) { return false; }

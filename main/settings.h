@@ -65,3 +65,7 @@ void app_settings_set_book_shake(bool on);
 uint8_t app_settings_light_level(void);
 uint8_t app_settings_light_warmth(void);
 void app_settings_set_light(uint8_t level, uint8_t warmth);
+
+/// 最近成功显示的壁纸文件名，锁屏/关机独立保存；失败不改变内存值。/ Last successfully displayed wallpaper name, separate for lock/off; failures leave the cached value unchanged.
+const char *app_settings_wallpaper_last(bool off);
+bool app_settings_set_wallpaper_last(bool off,const char *name);

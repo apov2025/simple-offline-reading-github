@@ -8,6 +8,7 @@
  */
 
 #include "read_pico_sd.h"
+#include "read_pico_sd_usb.h"
 
 #include <errno.h>
 #include <stddef.h>
@@ -32,6 +33,11 @@ static sdmmc_card_t* card;
 static int probe_state;
 static portMUX_TYPE state_lock = portMUX_INITIALIZER_UNLOCKED;
 static bool media_invalidated;
+static bool usb_reserved;
+static sdmmc_card_t usb_card;
+static bool usb_host_ready;
+static bool usb_slot_ready;
+static bool usb_cleanup_failed;
 static read_pico_sd_info_t cached_info;
 
 // 失效只影响快照，消费者释放句柄前不得卸载卡。/ Invalidation changes snapshots only; consumers must close handles before unmount.
@@ -87,15 +93,7 @@ static void ensure_font_dirs(void) {
     }
 }
 
-static esp_err_t mount_card(bool format_if_failed) {
-    if (card != NULL) return ESP_OK;
-
-    sdmmc_host_t host = SDMMC_HOST_DEFAULT();
-    // 1-bit 只能靠提时钟换带宽。20MHz 默认对随机小读太慢，40MHz 多数卡能稳住。
-    // / 1-bit only buys bandwidth by raising the clock. 20 MHz is too slow for
-    // random small reads; 40 MHz holds on most cards.
-    host.max_freq_khz = SDMMC_FREQ_HIGHSPEED;
-
+static sdmmc_slot_config_t card_slot(void) {
     sdmmc_slot_config_t slot = SDMMC_SLOT_CONFIG_DEFAULT();
     slot.width = 1;
     slot.clk = SD_PIN_CLK;
@@ -107,6 +105,19 @@ static esp_err_t mount_card(bool format_if_failed) {
     slot.cd = GPIO_NUM_NC;
     slot.wp = GPIO_NUM_NC;
     slot.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
+    return slot;
+}
+
+static esp_err_t mount_card(bool format_if_failed) {
+    if (card != NULL) return ESP_OK;
+
+    sdmmc_host_t host = SDMMC_HOST_DEFAULT();
+    // 1-bit 只能靠提时钟换带宽。20MHz 默认对随机小读太慢，40MHz 多数卡能稳住。
+    // / 1-bit only buys bandwidth by raising the clock. 20 MHz is too slow for
+    // random small reads; 40 MHz holds on most cards.
+    host.max_freq_khz = SDMMC_FREQ_HIGHSPEED;
+
+    sdmmc_slot_config_t slot = card_slot();
 
     const esp_vfs_fat_sdmmc_mount_config_t mount_config = {
         .format_if_mount_failed = format_if_failed,
@@ -133,14 +144,16 @@ static esp_err_t mount_card(bool format_if_failed) {
     return err;
 }
 
-static void close_card(void) {
+static esp_err_t close_card(void) {
     if (card != NULL) {
         esp_err_t err = esp_vfs_fat_sdcard_unmount(SD_MOUNT_POINT, card);
         if (err != ESP_OK) {
             ESP_LOGW(TAG, "unmount %s", esp_err_to_name(err));
         }
         card = NULL;
+        return err;
     }
+    return ESP_OK;
 }
 
 static void probe_task(void* arg) {
@@ -178,7 +191,8 @@ esp_err_t read_pico_sd_start_probe(void) {
     portENTER_CRITICAL(&state_lock);
     observe_media_locked(present);
     esp_err_t err = ESP_OK;
-    if (probe_state == 1) err = ESP_ERR_NOT_FINISHED;
+    if (usb_reserved) err = ESP_ERR_INVALID_STATE;
+    else if (probe_state == 1) err = ESP_ERR_NOT_FINISHED;
     else if (media_invalidated) err = cached_info.error;
     else if (probe_state == 2) err = cached_info.mounted ? ESP_OK :
         cached_info.error != ESP_OK ? cached_info.error : ESP_FAIL;
@@ -223,7 +237,7 @@ esp_err_t read_pico_sd_get_info(read_pico_sd_info_t* info) {
 // 驱动操作期间占用忙状态，不在临界区执行 I/O。/ Reserve busy state across driver I/O outside the critical section.
 static bool begin_operation(void) {
     portENTER_CRITICAL(&state_lock);
-    bool ready = probe_state != 1;
+    bool ready = !usb_reserved && probe_state != 1;
     if (ready) probe_state = 1;
     portEXIT_CRITICAL(&state_lock);
     return ready;
@@ -253,7 +267,7 @@ esp_err_t read_pico_sd_format(void) {
     (void)read_pico_sd_get_info(&current);
     portENTER_CRITICAL(&state_lock);
     bool invalid = media_invalidated;
-    bool busy = probe_state == 1;
+    bool busy = usb_reserved || probe_state == 1;
     if (!invalid && !busy) probe_state = 1;
     portEXIT_CRITICAL(&state_lock);
     if (invalid) return current.present ? ESP_ERR_INVALID_STATE : ESP_ERR_NOT_FOUND;
@@ -283,4 +297,69 @@ esp_err_t read_pico_sd_format(void) {
     }
     publish_info(&info);
     return err;
+}
+
+
+bool read_pico_sd_usb_claimed(void) {
+    portENTER_CRITICAL(&state_lock);
+    bool claimed = usb_reserved;
+    portEXIT_CRITICAL(&state_lock);
+    return claimed;
+}
+
+esp_err_t read_pico_sd_claim_usb(sdmmc_card_t** result) {
+    if (!result) return ESP_ERR_INVALID_ARG;
+    *result = NULL;
+    bool present = read_pico_sd_present();
+    portENTER_CRITICAL(&state_lock);
+    observe_media_locked(present);
+    esp_err_t err = !present ? ESP_ERR_NOT_FOUND :
+        probe_state == 1 ? ESP_ERR_NOT_FINISHED :
+        usb_reserved || media_invalidated || !cached_info.mounted ? ESP_ERR_INVALID_STATE : ESP_OK;
+    if (err == ESP_OK) {
+        usb_reserved = true;
+        cached_info = (read_pico_sd_info_t){.present = true, .error = ESP_ERR_INVALID_STATE};
+    }
+    portEXIT_CRITICAL(&state_lock);
+    if (err != ESP_OK) return err;
+    err = close_card();
+    if (err != ESP_OK) {
+        usb_cleanup_failed = true;
+        return err;
+    }
+    sdmmc_host_t host = SDMMC_HOST_DEFAULT();
+    host.command_timeout_ms = 1000;
+    sdmmc_slot_config_t slot = card_slot();
+    err = sdmmc_host_init();
+    if (err != ESP_OK) return err;
+    usb_host_ready = true;
+    err = sdmmc_host_init_slot(host.slot, &slot);
+    if (err != ESP_OK) return err;
+    usb_slot_ready = true;
+    err = sdmmc_card_init(&host, &usb_card);
+    if (err == ESP_OK && !read_pico_sd_present()) err = ESP_ERR_NOT_FOUND;
+    if (err == ESP_OK) *result = &usb_card;
+    return err;
+}
+
+esp_err_t read_pico_sd_end_usb(void) {
+    if (!read_pico_sd_usb_claimed() || usb_cleanup_failed) return ESP_ERR_INVALID_STATE;
+    if (usb_host_ready) {
+        sdmmc_host_t host = SDMMC_HOST_DEFAULT();
+        esp_err_t err = usb_slot_ready ? sdmmc_host_deinit_slot(host.slot) : sdmmc_host_deinit();
+        if (err != ESP_OK) {
+            usb_cleanup_failed = true;
+            return err;
+        }
+        usb_slot_ready = false;
+        usb_host_ready = false;
+    }
+    // 原 FAT 快照已过期；下一次探测读取电脑更新后的目录。/ The next probe opens a fresh FAT view.
+    portENTER_CRITICAL(&state_lock);
+    cached_info = (read_pico_sd_info_t){0};
+    media_invalidated = false;
+    probe_state = 0;
+    usb_reserved = false;
+    portEXIT_CRITICAL(&state_lock);
+    return ESP_OK;
 }

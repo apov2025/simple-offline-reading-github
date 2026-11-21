@@ -431,7 +431,7 @@ static int u32_cmp(const void* a, const void* b) {
     return 0;
 }
 
-static bool io_load_run(uint32_t base, int blocks) {
+static bool io_load_cold_run(uint32_t base, int blocks) {
     if (blocks <= 1) return io_load_block(base);
     if (blocks > TTF_IO_RUN_MAX) blocks = TTF_IO_RUN_MAX;
     if (io_run_buf == NULL
@@ -456,6 +456,25 @@ static bool io_load_run(uint32_t base, int blocks) {
         io_age[slot] = ++io_clock;
     }
     return true;
+}
+
+// 先保护已缓存块，只合并连续的冷缺口，避免重读相邻热块。
+// Touch cached blocks first, then merge only contiguous misses to avoid rereading warm neighbors.
+static bool io_load_run(uint32_t base, int blocks) {
+    if (blocks <= 1) return io_load_block(base);
+    if (blocks > TTF_IO_RUN_MAX) blocks = TTF_IO_RUN_MAX;
+    bool missing[TTF_IO_RUN_MAX];
+    for (int i = 0; i < blocks; i++)
+        missing[i] = io_find(base + (uint32_t)i * TTF_IO_BLOCK) < 0;
+    bool ok = true;
+    for (int i = 0; i < blocks;) {
+        if (!missing[i]) { i++; continue; }
+        int end = i + 1;
+        while (end < blocks && missing[end]) end++;
+        if (!io_load_cold_run(base + (uint32_t)i * TTF_IO_BLOCK, end - i)) ok = false;
+        i = end;
+    }
+    return ok;
 }
 
 static void io_flush_touches(void) {
@@ -1432,6 +1451,29 @@ static bool pack_glyph_tree(int root_gid) {
     tree[tree_n++] = root_gid;
 
     uint8_t* arena = font_data + work_glyf_off;
+    // 先收集复合引用，再按字形编号排放；相邻编号共用一个 loca 边界。
+    // Gather compound references before packing in glyph-ID order: adjacent IDs share a loca boundary.
+    for (int i = 0; i < tree_n; i++) {
+        uint32_t len = file_glyph_len(tree[i]);
+        if (len < 10) continue;
+        uint32_t off = file_glyf_off + file_glyph_off(tree[i]);
+        uint8_t header[10];
+        if (!file_read_at(off, header, sizeof(header))) return false;
+        if ((int16_t)be16(header) >= 0) continue;
+        if (len > TTF_GLYF_ARENA || !file_read_at(off, arena, len)
+            || !enqueue_composite_children(arena, len, tree, &tree_n)) {
+            return false;
+        }
+    }
+    for (int i = 1; i < tree_n; i++) {
+        int gid = tree[i];
+        int j = i;
+        while (j > 0 && tree[j - 1] > gid) {
+            tree[j] = tree[j - 1];
+            j--;
+        }
+        tree[j] = gid;
+    }
     uint32_t packed = 0;
     for (int i = 0; i < tree_n; i++) {
         int gid = tree[i];
@@ -1459,9 +1501,6 @@ static bool pack_glyph_tree(int root_gid) {
         packed = (packed + 3u) & ~3u;
         if (packed > TTF_GLYF_ARENA) return false;
         set_work_loca(gid + 1, packed);
-        if (used >= 2 && !enqueue_composite_children(blob, used, tree, &tree_n)) {
-            return false;
-        }
     }
     packed_root = root_gid;
     packed_weight = current_weight;

@@ -37,6 +37,22 @@ void book_layout_free(void);
 size_t book_layout_page_count(void);
 /// 使用建立布局时的宽高与字号绘图；不匹配或越界时不绘制。/ Draw with the built dimensions and size; mismatches or invalid pages do nothing.
 void book_layout_draw_page(uint8_t* fb, size_t page, EpdRect rect, int px);
+/// 原页可选字形；范围借用原文 UTF-8 字节，不含排版补出的连字符或空白。
+/// Selectable glyph on the original page; source UTF-8 spans exclude generated hyphens and spaces.
+typedef struct {
+    size_t start, end;  ///< 原文半开字节区间 / Half-open source byte range
+    EpdRect rect;      ///< 横向墨迹及原字号行框，含行尾人工连字符；缺字回退步进宽度 / Horizontal ink bounds and font line box; includes trailing generated hyphen, advance fallback for missing ink
+    int x;             ///< 绘制落笔点，包含字形偏移 / Renderer pen position including glyph offset
+    int baseline;      ///< 原页基线 / Original page baseline
+    int px;            ///< 原页字形字号，含标题增量 / Original glyph size including heading increment
+} book_layout_glyph_t;
+/// 回调参数只在本次回调期间有效；返回 false 停止遍历。/ Glyph pointer is borrowed during the callback; false stops traversal.
+typedef bool (*book_layout_glyph_visitor_t)(const book_layout_glyph_t* glyph, void* context);
+/// 用绘制相同的坐标遍历原页，不改分页、原文或字体；调用方持有字体锁，回调不得重入布局或换字体。
+/// Visit original-page draw coordinates without changing pagination, source or font; hold the font lock and do not reenter layout or change fonts in callbacks.
+/// 无效参数、排版失败或回调停止返回 false；空页成功；不分配命中表，跳过图片、空白及补出的连字符。
+/// False for invalid arguments, layout failure or callback stop; empty pages succeed; no hit-table allocation; images, spaces and generated hyphens are skipped.
+bool book_layout_visit_page(size_t page, EpdRect rect, int px, book_layout_glyph_visitor_t visitor, void* context);
 /// 命中本页未加载图片占位，返回块索引及可选矩形；未命中为 SIZE_MAX；与绘制使用相同锁。
 /// Hit an unloaded image placeholder, returning its block index and optional bounds; SIZE_MAX if absent; use the drawing lock.
 size_t book_layout_image_at(size_t page, EpdRect rect, int x, int y, EpdRect* hit);

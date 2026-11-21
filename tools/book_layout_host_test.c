@@ -19,6 +19,8 @@ static size_t image_pixels;
 // 每次绘制调用的 x 坐标，用来检查缩进、挤压和两端对齐。/ The x of each draw call, to check indent, compression and justification.
 static int draw_x[4096];
 static size_t draw_n;
+static int draw_y[4096], draw_px[4096];
+static char draw_text[4096][5];
 // 正文区 100 宽、15 高、字号 10：一行正好一页，页表就是各行的起始偏移。
 // Body 100 wide, 15 high, size 10: one line per page, so the page table lists each line's start offset.
 static void typeset(const char* text, uint8_t* fb) {
@@ -37,9 +39,13 @@ void epd_draw_pixel(int x, int y, uint8_t color, uint8_t* fb) {
 // In a real font a character is narrower than the size (the line box's pixel height); the ratio is
 // 100% by default and lowered by cases that imitate a real font.
 static int glyph_scale_pct = 100;
+static int ascender_scale_pct = 100;
+static bool have_ink_bounds;
+static int punctuation_fixture;
 int ttf_text_width_px(int px, const char* text) {
     int n = 0, width = 0;
     const int em = px * glyph_scale_pct / 100;
+    if (punctuation_fixture && !strcmp(text, "“")) return punctuation_fixture == 2 ? 10 : 5;
     for (; *text; text++) if (((unsigned char)*text & 0xc0) != 0x80) {
         n++;
         width += *text == 'i' ? em / 2 : *text == 'W' ? em + em / 2 : em;
@@ -48,22 +54,137 @@ int ttf_text_width_px(int px, const char* text) {
     measure_calls++;
     return width;
 }
-int ttf_ascender_px(int px) { return px; }
+int ttf_ascender_px(int px) { return px * ascender_scale_pct / 100; }
 // 主机测试里没有真字形：报"量不到"，排版退回"按半个字宽"的算法。
 // No real glyphs on the host: report nothing measurable so the layout falls back to its half-em rule.
 bool ttf_glyph_ink_px(int px, uint32_t codepoint, int* left, int* width) {
-    (void)px; (void)codepoint; (void)left; (void)width;
-    return false;
+    if (punctuation_fixture) {
+        if (codepoint == 0xFF08) { *left = 7; *width = 3; return true; }
+        if (codepoint == 0x201C) {
+            *left = punctuation_fixture == 3 ? -2 : 2;
+            *width = 4; return true;
+        }
+        return false;
+    }
+    if (!have_ink_bounds) return false;
+    *left = 2; *width = px - 3;
+    return true;
 }
 void ttf_draw_text_px(uint8_t* fb, int x, int y, int px, const char* text,
                       enum EpdFontFlags align, uint8_t fg, uint8_t bg) {
     (void)fb; (void)y; (void)px; (void)align;
     assert(fg <= 15 && bg <= 15);
-    if (draw_n < sizeof(draw_x) / sizeof(draw_x[0])) draw_x[draw_n++] = x;
+    if (draw_n < sizeof(draw_x) / sizeof(draw_x[0])) {
+        draw_x[draw_n] = x; draw_y[draw_n] = y; draw_px[draw_n] = px;
+        snprintf(draw_text[draw_n], sizeof(draw_text[draw_n]), "%.4s", text);
+        draw_n++;
+    }
     if (!drawn[0]) first_draw_px = px;
     last_draw_px = px;
     assert(strlen(drawn) + strlen(text) < sizeof(drawn));
     strcat(drawn, text);
+}
+// 若选字重排、丢失字节或遗漏字形偏移，这些断言会失败。/ These assertions catch selection reflow, lost byte spans and ignored glyph offsets.
+typedef struct { const char* text; size_t index, count, start, end, previous; } visit_check_t;
+static bool check_glyph(const book_layout_glyph_t* g, void* context) {
+    visit_check_t* c = context;
+    size_t n = g->end - g->start;
+    assert(g->start >= c->start && g->end <= c->end && g->start >= c->previous);
+    assert(n > 0 && n <= 4);
+    while (c->index < draw_n && !strcmp(draw_text[c->index], "-") &&
+           (n != 1 || c->text[g->start] != '-')) c->index++;
+    assert(c->index < draw_n);
+    size_t i = c->index++;
+    assert(strlen(draw_text[i]) == n && !memcmp(draw_text[i], c->text + g->start, n));
+    assert(g->x == draw_x[i] && g->baseline == draw_y[i] && g->px == draw_px[i]);
+    assert(g->rect.x == g->x + (have_ink_bounds ? 2 : 0) && g->rect.width > 0);
+    const bool added_hyphen=i+1<draw_n && !strcmp(draw_text[i+1],"-") && draw_y[i+1]==g->baseline && c->text[g->end]!='-';
+    if(added_hyphen) {
+        const int right=draw_x[i+1]+(have_ink_bounds?g->px-1:ttf_text_width_px(g->px,"-"));
+        assert(g->rect.x+g->rect.width>=right);
+    } else if (have_ink_bounds) assert(g->rect.width == g->px - 3);
+    assert(g->rect.y == g->baseline - g->px * ascender_scale_pct / 100 && g->rect.height == g->px);
+    c->previous = g->end; c->count++;
+    return true;
+}
+static bool stop_glyph(const book_layout_glyph_t* g, void* context) {
+    (void)g; (*(size_t*)context)++; return false;
+}
+static size_t check_page_geometry(const char* text, EpdRect r, int px, size_t page) {
+    uint8_t fb = 0;
+    drawn[0] = 0; draw_n = 0;
+    book_layout_draw_page(&fb, page, r, px);
+    const size_t pages = book_layout_page_count(), count = draw_n;
+    const bool complete = book_layout_complete();
+    const size_t start = book_layout_page_start_offset(page), end = book_layout_page_start_offset(page + 1);
+    visit_check_t check = {.text=text,.start=start,.end=end};
+    assert(book_layout_visit_page(page, r, px, check_glyph, &check));
+    while (check.index < draw_n && !strcmp(draw_text[check.index], "-")) check.index++;
+    assert(check.index == count && draw_n == count);
+    assert(book_layout_page_count() == pages && book_layout_complete() == complete);
+    assert(book_layout_page_start_offset(page) == start && book_layout_page_start_offset(page + 1) == end);
+    assert(!book_layout_visit_page(page, r, px + 1, check_glyph, &check));
+    assert(!book_layout_visit_page(pages, r, px, check_glyph, &check));
+    assert(!book_layout_visit_page(page, r, px, NULL, NULL));
+    assert(!book_layout_visit_page(page, (EpdRect){r.x,r.y,r.width+1,r.height}, px, check_glyph, &check));
+    if (check.count) {
+        size_t stopped = 0;
+        assert(!book_layout_visit_page(page, r, px, stop_glyph, &stopped));
+        assert(stopped == 1);
+    }
+    return check.count;
+}
+static void test_page_geometry(void) {
+    const char* cases[] = {"甲乙丙丁戊己庚辛壬癸，子丑", "甲：「乙」，丙", "“ab” ab’cd",
+        "abcd computer xyz", "abc de fg hjklm", "abcdef don't x", "abcd 12345-67",
+        "　　甲乙\r\n\r\n丙丁", ""};
+    for (size_t c=0; c<sizeof(cases)/sizeof(cases[0]); c++) {
+        EpdRect r = {37,29,100,45};
+        assert(book_layout_build(cases[c], strlen(cases[c]), r, 10));
+        for (size_t page=0; page<book_layout_page_count(); page++) check_page_geometry(cases[c],r,10,page);
+    }
+    const char* heading = "甲乙\n“body” computer typesetting\n末段";
+    const char* last = strrchr(heading, '\n');
+    blk_t blocks[] = {{.offset=0,.len=6,.heading=true}, {.offset=7,.len=(size_t)(last-heading)-7},
+        {.offset=(size_t)(last-heading)+1,.len=strlen(last+1)}};
+    glyph_scale_pct = 70;
+    ascender_scale_pct = 80;
+    have_ink_bounds = true;
+    EpdRect r = {40,24,180,140};
+    assert(book_layout_build_blocks(heading,strlen(heading),blocks,3,r,23));
+    for (size_t page=0; page<book_layout_page_count(); page++) check_page_geometry(heading,r,23,page);
+    glyph_scale_pct = ascender_scale_pct = 100;
+    have_ink_bounds = false;
+    char long_page[3001]; memset(long_page,'z',3000); long_page[3000]=0;
+    r = (EpdRect){17,21,1000,450};
+    assert(book_layout_begin_blocks(long_page,3000,NULL,0,r,10));
+    assert(check_page_geometry(long_page,r,10,0) == 3000);
+    // 不完成后续分页也能遍历已完成页。/ Completed pages can be visited without finishing the chapter.
+    r = (EpdRect){17,21,100,30};
+    assert(book_layout_begin_blocks(long_page,3000,NULL,0,r,10));
+    assert(!book_layout_complete());
+    assert(check_page_geometry(long_page,r,10,0) == 20);
+}
+// 窄引号、居左全角引号和负左边距都不能被前面的括号压住。
+// A preceding parenthesis must not collide with narrow, left-aligned fullwidth, or negative-bearing quotes.
+static void test_punctuation_ink(void) {
+    uint8_t fb = 0;
+    const char* cases[] = {"（“世界的黑暗大敌”）", "甲（“乙”）丙", "甲（（“乙”））丙"};
+    for (punctuation_fixture = 1; punctuation_fixture <= 3; punctuation_fixture++) {
+        for (size_t c = 0; c < sizeof(cases)/sizeof(cases[0]); c++) {
+            typeset(cases[c], &fb);
+            for (size_t i = 1; i < draw_n; i++) {
+                if (strcmp(draw_text[i-1], "（") || strcmp(draw_text[i], "“")) continue;
+                assert(draw_y[i-1] == draw_y[i]);
+                const int left = punctuation_fixture == 3 ? -2 : 2;
+                const int gap = draw_x[i] + left - (draw_x[i-1] + 10);
+                // 原本无空白时仅禁止继续挤压，不凭空增加步进。
+                // If the original pair has no blank, disable compression without adding advance.
+                assert(gap == (left < 0 ? left : 1));
+            }
+        }
+    }
+    punctuation_fixture = 0;
 }
 int main(void) {
     EpdRect r = {0, 0, 20, 30};
@@ -377,6 +498,9 @@ int main(void) {
     book_layout_draw_page(&fb, 0, (EpdRect){0,0,200,60}, 10);
     assert(draw_n == 2 && draw_x[0] == 0);
 
+    book_layout_free();
+    test_punctuation_ink();
+    test_page_geometry();
     book_layout_free();
     puts("book_layout_host_test: PASS");
 }

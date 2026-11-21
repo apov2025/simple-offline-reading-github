@@ -362,6 +362,19 @@ static bool s_wifi, s_started, s_loop_owned;
 static char *s_buffer;
 static bool s_stopping, s_upload_active;
 static bool s_config_busy;
+static bool s_network_claimed, s_clock_claimed;
+
+// 跨任务租约在初始化前取得，清理完成后才释放。/ Acquire the cross-task lease before initialization and release after cleanup.
+static bool claim_network(bool clock) {
+    portENTER_CRITICAL(&s_lock);
+    bool ok = !s_network_claimed && !s_clock_claimed && !s_config_busy && !s_wifi && !s_netif && !s_http;
+    if (ok) { s_network_claimed = true; s_clock_claimed = clock; }
+    portEXIT_CRITICAL(&s_lock);
+    return ok;
+}
+static void release_network(void) {
+    portENTER_CRITICAL(&s_lock); s_network_claimed = s_clock_claimed = false; portEXIT_CRITICAL(&s_lock);
+}
 static transfer_connection_t s_connection;
 extern const char upload_start[] asm("_binary_upload_html_start");
 extern const char upload_end[] asm("_binary_upload_html_end");
@@ -373,7 +386,7 @@ void read_pico_transfer_get_status(read_pico_transfer_status_t *out) {
 
 static bool claim_config(void) {
     portENTER_CRITICAL(&s_lock);
-    bool available = !s_config_busy;
+    bool available = !s_config_busy && !s_clock_claimed;
     if (available) s_config_busy = true;
     portEXIT_CRITICAL(&s_lock);
     return available;
@@ -423,12 +436,13 @@ esp_err_t read_pico_transfer_scan_wifi(read_pico_transfer_network_t out[READ_PIC
     read_pico_transfer_status_t status;
     read_pico_transfer_get_status(&status);
     if (s_wifi || s_http || s_netif || status.state != READ_PICO_TRANSFER_STOPPED) return ESP_ERR_INVALID_STATE;
+    if (!claim_network(false)) return ESP_ERR_INVALID_STATE;
     bool loop_owned = false, initialized = false, started = false;
     esp_err_t err = esp_netif_init();
-    if (err != ESP_OK) return err;
+    if (err != ESP_OK) goto cleanup;
     err = esp_event_loop_create_default();
     if (err == ESP_OK) loop_owned = true;
-    else if (err != ESP_ERR_INVALID_STATE) return err;
+    else if (err != ESP_ERR_INVALID_STATE) goto cleanup;
     wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();
     err = esp_wifi_init(&init); if (err != ESP_OK) goto cleanup;
     initialized = true;
@@ -469,6 +483,7 @@ cleanup:
     }
     if (err != ESP_OK) { memset(out, 0, sizeof(*out) * READ_PICO_TRANSFER_SCAN_MAX); *count = 0; }
     ESP_LOGI("transfer", "wifi scan result=%s count=%u", esp_err_to_name(err), (unsigned)*count);
+    release_network();
     return err;
 }
 
@@ -892,14 +907,18 @@ static esp_err_t font_info_handler(httpd_req_t *req) {
 /* ---- 生命周期 / Lifecycle ---- */
 bool read_pico_transfer_try_stop_if_idle(void) {
     portENTER_CRITICAL(&s_lock);
-    bool accepted = admission_stop(&s_stopping, s_upload_active);
+    bool accepted = !s_clock_claimed && admission_stop(&s_stopping, s_upload_active);
+    if (accepted) s_network_claimed = true;
     portEXIT_CRITICAL(&s_lock);
     if (accepted) read_pico_transfer_stop();
     return accepted;
 }
 
 void read_pico_transfer_stop(void) {
-    portENTER_CRITICAL(&s_lock); s_stopping = true; portEXIT_CRITICAL(&s_lock);
+    portENTER_CRITICAL(&s_lock);
+    if (s_clock_claimed) { portEXIT_CRITICAL(&s_lock); return; }
+    s_stopping = true; s_network_claimed = true;
+    portEXIT_CRITICAL(&s_lock);
     if (s_http) { httpd_stop(s_http); s_http = NULL; }
     if (s_started) { esp_wifi_stop(); s_started = false; }
     if (s_events) { esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, s_events); s_events = NULL; }
@@ -913,6 +932,7 @@ void read_pico_transfer_stop(void) {
     s_status.network_ready = false; s_status.url[0] = 0;
     s_upload_active = false;
     memset(&s_connection, 0, sizeof(s_connection));
+    s_network_claimed = false;
     portEXIT_CRITICAL(&s_lock);
 }
 
@@ -920,7 +940,7 @@ esp_err_t read_pico_transfer_start(const read_pico_transfer_cfg_t *cfg) {
     if (!cfg || !cfg->root_dir || !cfg->free_bytes_cb || strlen(cfg->root_dir) >= sizeof(s_root) ||
         (cfg->font_dir && (cfg->is_flash || !cfg->font_dir[0] || strlen(cfg->font_dir) >= sizeof(s_font_root))) ||
         (cfg->mode != READ_PICO_TRANSFER_MODE_AP && cfg->mode != READ_PICO_TRANSFER_MODE_STA)) return ESP_ERR_INVALID_ARG;
-    if (s_wifi || s_netif || s_http) return ESP_ERR_INVALID_STATE;
+    if (!claim_network(false)) return ESP_ERR_INVALID_STATE;
     s_cfg = *cfg; strcpy(s_root, cfg->root_dir); s_cfg.root_dir = s_root;
     snprintf(s_font_root, sizeof(s_font_root), "%s", cfg->font_dir ? cfg->font_dir : "");
     s_cfg.font_dir = s_font_root[0] ? s_font_root : NULL;
@@ -1020,5 +1040,27 @@ esp_err_t read_pico_transfer_start(const read_pico_transfer_cfg_t *cfg) {
 fail:
     clear_secret(&wifi, sizeof(wifi)); clear_secret(&saved, sizeof(saved));
     read_pico_transfer_stop(); set_error(err); return err;
+}
+
+esp_err_t read_pico_transfer_clock_acquire(char ssid[33], char password[65]) {
+    if (ssid) memset(ssid, 0, 33);
+    if (password) memset(password, 0, 65);
+    if (!ssid || !password) return ESP_ERR_INVALID_ARG;
+    if (!claim_network(true)) return ESP_ERR_INVALID_STATE;
+    transfer_credentials_t saved;
+    esp_err_t err = load_credentials(&saved);
+    if (err == ESP_OK && saved.version != 1) err = ESP_ERR_NOT_FOUND;
+    if (err == ESP_OK) {
+        memcpy(ssid, saved.ssid, 33);
+        memcpy(password, saved.password, 65);
+    }
+    clear_secret(&saved, sizeof(saved));
+    if (err != ESP_OK) release_network();
+    return err;
+}
+void read_pico_transfer_clock_release(void) {
+    portENTER_CRITICAL(&s_lock);
+    if (s_clock_claimed) s_network_claimed = s_clock_claimed = false;
+    portEXIT_CRITICAL(&s_lock);
 }
 #endif

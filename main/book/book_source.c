@@ -75,3 +75,25 @@ esp_err_t book_read_file(const char *name, size_t len, uint8_t **out) {
     *out = NULL;
     return s_epub ? book_epub_read_open_file(s_epub, name, len, out) : ESP_ERR_NOT_SUPPORTED;
 }
+
+size_t book_toc_count(void) { return s_epub ? book_epub_toc_count(s_epub) : s_book.count; }
+esp_err_t book_toc_get(size_t index, book_toc_entry_t *out) {
+    if (!out) return ESP_ERR_INVALID_ARG;
+    if (s_epub) return book_epub_toc_get(s_epub, index, out);
+    book_toc_entry_t entry = {.chapter = index};
+    esp_err_t err = book_chapter_title(index, entry.title, sizeof(entry.title));
+    if (err == ESP_OK) *out = entry;
+    return err;
+}
+esp_err_t book_toc_resolve(size_t index, size_t *chapter, size_t *offset) {
+    if (!chapter || !offset) return ESP_ERR_INVALID_ARG;
+    if (s_epub) return book_epub_toc_resolve(s_epub, index, chapter, offset);
+    if (index >= s_book.count) return ESP_ERR_INVALID_ARG;
+    *chapter = index; *offset = 0; return ESP_OK;
+}
+
+esp_err_t book_toc_current(size_t chapter, size_t offset, size_t *index) {
+    if (!index || chapter >= book_chapter_count()) return ESP_ERR_INVALID_ARG;
+    if (s_epub) return book_epub_toc_current(s_epub, chapter, offset, index);
+    *index = chapter; return ESP_OK;
+}

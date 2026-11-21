@@ -18,7 +18,6 @@
 #include "epd_highlevel.h"
 #include "epdiy.h"
 #include "esp_log.h"
-#include "pmu_selftest.h"
 #include "read_pico_board.h"
 #include "read_pico_init.h"
 #include "read_pico_pmu.h"
@@ -71,9 +70,7 @@ void app_main(void) {
     if (read_pico_init(&hw) != ESP_OK) return;
     app_settings_init();
     const bool vcom_ok = resolve_vcom_at_boot();
-    pmu_selftest_bind(hw.sensor);
     app_sleep_bind(hw.touch, hw.sensor);
-    const bool st_resume = pmu_selftest_boot_resume();
 
     if (!images_match_panel()) return;
 
@@ -87,7 +84,7 @@ void app_main(void) {
     // 续读省掉开机图的一次整屏；保留物理清屏，随后首帧 GC16 建立可靠基准。
     // Resume skips one splash refresh; retain the physical clear and the first GC16 for a reliable baseline.
     char last_book[288];
-    const bool resume_reader = !st_resume && vcom_ok && hw.touch_ready
+    const bool resume_reader = vcom_ok && hw.touch_ready
         && book_progress_last_path(last_book, sizeof(last_book)) && last_book[0];
     if (!resume_reader) {
         ui_draw_full_image(framebuffer, loading_4bpp_bin_start);
@@ -111,9 +108,7 @@ void app_main(void) {
         .acc = hw.sensor,
         .tp = hw.touch,
         .sensor_ready = hw.sensor_ready,
-        // 自检跑到一半断电的话，重新上电直接回自检页接着跑。
-        // Resume the self-test page if a power-cut interrupted it.
-        // 平时开机直接进阅读器的书库。/ A normal boot lands in the reader's library.
-        .first_app = st_resume ? app_selftest_page() : app_reader_page(),
+        // 产品启动只进入阅读器，忽略遗留 demo 自检状态。/ Product boots enter the reader, ignoring legacy demo self-test state.
+        .first_app = app_reader_page(),
     });
 }

@@ -45,3 +45,14 @@ book_kind_t book_kind(void);
 esp_err_t book_read_meta(book_epub_meta_t *out);
 /// 复用当前 EPUB 读取封面等定长条目；调用方释放输出。/ Reuse the current EPUB for exact-size entries such as covers; caller frees output.
 esp_err_t book_read_file(const char *name, size_t len, uint8_t **out);
+
+/// 独立目录数量；TXT 与无有效 EPUB 目录时按章节回退。/ Independent TOC count; TXT and EPUB without usable navigation fall back to chapters.
+size_t book_toc_count(void);
+/// 读取目录标题、层级与原章节索引。/ Read navigation label, depth and original chapter index.
+esp_err_t book_toc_get(size_t index, book_toc_entry_t *out);
+/// 解析目录的正文 UTF-8 字节位置；失败不修改输出和当前书源。/ Resolve the body UTF-8 position; failure preserves outputs and the current source.
+esp_err_t book_toc_resolve(size_t index, size_t *chapter, size_t *offset);
+
+/// 按章节和正文 UTF-8 字节位置找最近有效目录，TXT 按章节；失败保留 index。
+/// Find current TOC from chapter and body UTF-8 offset, using chapters for TXT; preserve index on failure.
+esp_err_t book_toc_current(size_t chapter, size_t offset, size_t *index);

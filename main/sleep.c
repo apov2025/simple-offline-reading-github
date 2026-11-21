@@ -27,6 +27,8 @@
 #include "settings.h"
 #include "ui_kit.h"
 #include "ui_power_screen.h"
+#include "board/reader_wallpaper.h"
+#include "board/reader_clock.h"
 
 static const char* TAG = "read_pico";
 
@@ -41,6 +43,7 @@ extern const uint8_t lock_4bpp_bin_start[] asm("_binary_lock_4bpp_bin_start");
 static const uint8_t* s_lock_image;
 
 void app_lock_set_image(const uint8_t* image_4bpp) { s_lock_image = image_4bpp; }
+bool app_lock_has_image(void) { return s_lock_image!=NULL; }
 
 static cst836u_handle_t s_tp;
 static sc7a20h_handle_t s_acc;
@@ -157,6 +160,9 @@ static bool pickup_wait_quiet(sc7a20h_handle_t acc, int quiet_ms, int timeout_ms
 }
 
 app_wake_source_t app_light_sleep_wait(sc7a20h_handle_t acc) {
+    // 所有入口共用校时清理门，未结束前不动外设或唤醒状态。
+    // Gate every entry on clock cleanup before touching peripherals or wake state.
+    if (!reader_clock_cancel()) return APP_WAKE_NONE;
     bool pickup = acc != NULL && app_settings_pickup_wake();
     bool acc_armed = false;
     periph_suspend(false);
@@ -276,6 +282,9 @@ app_wake_source_t app_light_sleep_wait(sc7a20h_handle_t acc) {
 }
 
 esp_err_t app_enter_host_sleep(app_sleep_mode_t mode) {
+    // 包括演示页直接调用，清理未完不可向PMU请求下电。
+    // Direct demo calls also wait for cleanup before requesting PMU power-down.
+    if (!reader_clock_cancel()) return ESP_ERR_INVALID_STATE;
     periph_suspend(true);
     pmu_selftest_prepare_powerdown();
     esp_err_t err = mode == APP_SLEEP_OFF
@@ -301,12 +310,16 @@ void enter_lock_and_sleep(
     if (read_pico_buzzer_score_busy()) (void)read_pico_buzzer_score_stop();
     app_sleep_mode_t mode = app_settings_sleep_mode();
     uint8_t* framebuffer = epd_hl_get_framebuffer(hl);
+    const uint8_t *wallpaper=reader_wallpaper_acquire(mode==APP_SLEEP_OFF,s_lock_image!=NULL);
     epd_poweron();
     epd_clear();
     epd_hl_set_all_white(hl);
-    if (mode == APP_SLEEP_OFF) ui_draw_power_screen(framebuffer, UI_POWER_SHUTTING_DOWN, NULL);
-    else ui_draw_full_image(framebuffer, s_lock_image != NULL ? s_lock_image : lock_4bpp_bin_start);
-    epd_hl_update_screen_from_white(hl, MODE_GC16, 25);
+    if (mode == APP_SLEEP_OFF) {
+        if(wallpaper)ui_draw_full_image(framebuffer,wallpaper);
+        else ui_draw_power_screen(framebuffer, UI_POWER_SHUTTING_DOWN, NULL);
+    } else ui_draw_full_image(framebuffer, s_lock_image != NULL ? s_lock_image : wallpaper?wallpaper:lock_4bpp_bin_start);
+    enum EpdDrawError wallpaper_result=epd_hl_update_screen_from_white(hl, MODE_GC16, 25);
+    reader_wallpaper_finish(wallpaper && wallpaper_result==EPD_DRAW_SUCCESS);
 
     app_lock_wait_key_idle(800);
     ESP_LOGI(TAG, "lock %s", app_sleep_mode_name(mode));

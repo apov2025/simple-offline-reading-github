@@ -23,6 +23,9 @@
 #include "sleep.h"
 #include "ui_kit.h"
 #include "ui_power_screen.h"
+#if !READER_METALIO
+#include "board/reader_wallpaper.h"
+#endif
 #include "ui_menu.h"
 
 extern const app_desc_t app_sleep;
@@ -234,10 +237,22 @@ static bool sleep_ui_same(const sleep_ui_t* a, const sleep_ui_t* b) {
 // 试睡先整屏定稿，避免客人把静止的演示页当成死机。/ Settle the whole screen before a trial sleep so a still demo page is not taken for a hang.
 static void sleep_show_notice(app_ctx_t* ctx, app_sleep_mode_t mode) {
     if (mode == APP_SLEEP_OFF) {
+#if !READER_METALIO
+        const uint8_t *wallpaper=reader_wallpaper_acquire(true,false);
+        if(wallpaper)ui_draw_full_image(ctx->fb,wallpaper);
+        else
+#endif
         ui_draw_power_screen(ctx->fb, UI_POWER_SHUTTING_DOWN, NULL);
-        guard_draw_result(ctx->hl, update_display_full(ctx->hl));
+        enum EpdDrawError result=update_display_full(ctx->hl);
+#if !READER_METALIO
+        reader_wallpaper_finish(wallpaper && result==EPD_DRAW_SUCCESS);
+#endif
+        guard_draw_result(ctx->hl,result);
         return;
     }
+#if !READER_METALIO
+    reader_wallpaper_invalidate();
+#endif
     const char* zh;
     const char* en;
     sleep_notice_text(mode, &zh, &en);
@@ -386,6 +401,9 @@ static app_redraw_t on_tick(app_ctx_t* ctx) {
 }
 
 const app_desc_t app_sleep = {
+#if !READER_METALIO
+    .preloads_wallpaper = true,
+#endif
     .title = SLEEP_TITLE,
     .detail = "试睡与锁屏 Try Sleep & Lock",
     .enter_full = true,

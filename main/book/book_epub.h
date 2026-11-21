@@ -15,6 +15,28 @@
 #include "html_text.h"
 
 typedef struct book_epub book_epub_t;
+#define BOOK_TOC_TITLE_CAP 160
+/// 独立导航条目；chapter 始终指向原 spine，不重排续读位置。/ Independent navigation entry; chapter keeps the original spine index.
+typedef struct {
+    char title[BOOK_TOC_TITLE_CAP]; ///< UTF-8 标签 / UTF-8 label
+    unsigned depth; ///< 零基层级 / Zero-based nesting depth
+    size_t chapter; ///< 原 spine 章节 / Original spine chapter
+} book_toc_entry_t;
+/// 返回导航数量；NCX 优先，缺失或损坏时尝试 NAV，最终使用 spine。
+/// Navigation count; prefer NCX, try NAV when absent/broken, then fall back to spine.
+/// 目录最多 32768 项、64 层 XML 与 1 MiB 标签/片段，超限回退。/ Bound navigation to 32768 entries, 64 XML levels and 1 MiB of labels/fragments; overflow falls back.
+size_t book_epub_toc_count(const book_epub_t *book);
+/// 读取目录项，不加载正文。/ Read a navigation entry without loading body text.
+esp_err_t book_epub_toc_get(const book_epub_t *book, size_t index, book_toc_entry_t *out);
+/// 按需解析锚点为正文 UTF-8 字节位置；失败不改输出或阅读状态。/ Resolve anchors on demand to body UTF-8 offsets; failure preserves outputs and reading state.
+esp_err_t book_epub_toc_resolve(book_epub_t *book, size_t index, size_t *chapter, size_t *offset);
+
+/// 查当前位置之前最近的有效目录；没有前项时取首个后项，缺失片段不参与选择。
+/// Find the nearest valid preceding TOC location, otherwise the first upcoming one; ignore missing fragments.
+/// 同位置优先深层，再取最早行；每章片段单遍缓存，失败保留 index 和阅读状态。
+/// Ties prefer greater depth then earliest row; cache fragments in one pass per chapter, preserving index and reading state on failure.
+esp_err_t book_epub_toc_current(book_epub_t *book, size_t chapter, size_t offset, size_t *index);
+
 /// 书库列表用的书目信息，取自 OPF 的 dc:title / dc:creator / dc:date；没有的项是空串。
 /// Listing metadata from the OPF dc:title / dc:creator / dc:date; absent fields are empty strings.
 typedef struct {

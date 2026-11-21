@@ -19,6 +19,7 @@
  * 冻结（本项目追加）：正文按《中文排版需求》（W3C clreq）里最要紧的几条排：
  *   1. 行首禁则：句读、右括号右引号不出现在行首；行尾禁则：左括号左引号不留在行尾。
  *   2. 标点挤压：相邻的全角标点、行尾的句读与右括号、行首的左括号各让出半个字宽的空白。
+ *      相邻挤压以可测墨迹间的空白为限，避免全角括号与窄引号重叠。
  *   3. 段首默认不缩进，靠段间距分段；原文自带的缩进空格去掉，所有段落顶格。
  *      （book_layout_set_indent_em 可以打开缩进，标题始终不缩进。）
  *   4. 两端对齐：折行的那些行把余下的空白匀到字间；段末行、标题不拉伸。
@@ -38,6 +39,7 @@
  *      line-end prohibition: opening brackets/quotes never end one.
  *   2. Punctuation compression: adjacent fullwidth marks, a line-final pause/stop or closing
  *      bracket, and a line-initial opening bracket each give up their half-em blank.
+ *      Pair compression is limited to measurable ink gaps, preventing fullwidth brackets from colliding with narrow quotes.
  *   3. No first-line indent by default; paragraphs are set apart by spacing, and indent spaces in
  *      the source are dropped so every paragraph starts flush left. (book_layout_set_indent_em
  *      turns an indent on; headings are never indented.)
@@ -308,6 +310,23 @@ static bool squeezes(const glyph_t* a, const glyph_t* b, int em) {
     return (a->cls == G_CLOSE && is_punct(b->cls)) || (a->cls == G_OPEN && b->cls == G_OPEN);
 }
 
+// 字宽不保证墨迹靠哪一侧；只压掉两字墨迹之间的空白，计入西文引号的绘制偏移。
+// Advance does not locate the ink; remove only the gap between glyphs, including Latin quote draw offsets.
+static int pair_cut(const glyph_t* a, const glyph_t* b, int em, int px) {
+    if (!squeezes(a, b, em)) return 0;
+    int cut = a->adv / 2;
+    int a_left, a_width, b_left, b_width;
+    if (ttf_glyph_ink_px(px, a->cp, &a_left, &a_width) &&
+        ttf_glyph_ink_px(px, b->cp, &b_left, &b_width)) {
+        const int blank = a->adv + b->dx + b_left - (a->dx + a_left + a_width);
+        // 留一像素间隙；原本已相接或重叠时不再压缩，也不增加原步进。
+        // Keep one pixel clear; touching or overlapping originals are not compressed or given extra advance.
+        if (blank <= 1) return 0;
+        if (cut > blank - 1) cut = blank - 1;
+    }
+    return cut;
+}
+
 // 能不能在 a 和 b 之间断行。/ Whether a line may break between a and b.
 static bool can_break(const glyph_t* a, const glyph_t* b) {
     if (b->cls == G_CLOSE || b->cls == G_STOP || b->cls == G_ASCII_CLOSE) return false;  // 行首禁则 / line-start prohibition
@@ -487,7 +506,7 @@ static bool take_line(size_t off, line_t* line) {
         }
 
         // 前一个字因为后面跟了这个标点而让出的宽度。/ Width the previous glyph gives up because this mark follows it.
-        const int prev_cut = count > 0 && squeezes(&s_glyphs[count - 1], &g, em) ? s_glyphs[count - 1].adv / 2 : 0;
+        const int prev_cut = count > 0 ? pair_cut(&s_glyphs[count - 1], &g, em, px) : 0;
         // 一行以左括号、左引号开头时，它左边的空白挪到正文区外面，墨迹和左边缘对齐；有缩进的段首行除外。
         // An opening mark starting a line sheds its left blank so its ink meets the left edge; an indented first line is the exception.
         const int lead_cut = count == 0 && !indent && g.cls == G_OPEN && is_fullwidth(&g, em) ? adv / 2 : 0;
@@ -569,17 +588,42 @@ static bool take_line(size_t off, line_t* line) {
     return line->next > off;
 }
 
-// 把 take_line 排好的那一行画出来。/ Draw the line take_line just laid out.
-static void draw_line(uint8_t* fb, const line_t* line, int left, int baseline) {
+// 绘制与命中共用逐字坐标，正常绘制不生成命中表。/ Drawing and hit collection share glyph positions; ordinary drawing builds no hit table.
+static bool process_line(uint8_t* fb, const line_t* line, int left, int top, int baseline,
+                         book_layout_glyph_visitor_t visitor, void* context) {
     int x = left + line->x0;
     int done = 0;  // 已经走过的空隙权重 / gap weight passed so far
     for (int i = 0; i < line->visible; i++) {
         const glyph_t* g = &s_glyphs[i];
         if (g->cls != G_SPACE) {
-            char text[5];
-            memcpy(text, s_text + g->off, g->n);
-            text[g->n] = 0;
-            ttf_draw_text_px(fb, x + g->dx, baseline, line->px, text, EPD_DRAW_ALIGN_LEFT, 0, 15);
+            if (fb) {
+                char text[5];
+                memcpy(text, s_text + g->off, g->n);
+                text[g->n] = 0;
+                ttf_draw_text_px(fb, x + g->dx, baseline, line->px, text, EPD_DRAW_ALIGN_LEFT, 0, 15);
+            }
+            if (visitor) {
+                int ink_left = 0, ink_width = g->adv;
+                if (!ttf_glyph_ink_px(line->px, g->cp, &ink_left, &ink_width)) {
+                    ink_left = 0; ink_width = g->adv;
+                }
+                book_layout_glyph_t hit = {
+                    .start = g->off, .end = (size_t)g->off + g->n,
+                    .rect = {x + g->dx + ink_left, top, ink_width > 0 ? ink_width : 1, line->px},
+                    .x = x + g->dx, .baseline = baseline, .px = line->px,
+                };
+                // 人工连字符沿用前一个字的原文字节，外框包含它的实际墨迹。
+                // Include an inserted hyphen in the preceding glyph's box without inventing source bytes.
+                if(i+1==line->visible && line->hyphen_adv) {
+                    int hyphen_left=0,hyphen_width=line->hyphen_adv;
+                    if(!ttf_glyph_ink_px(line->px,'-',&hyphen_left,&hyphen_width)) {
+                        hyphen_left=0;hyphen_width=line->hyphen_adv;
+                    }
+                    const int right=x+g->adv-g->cut+hyphen_left+hyphen_width;
+                    if(right>hit.rect.x+hit.rect.width)hit.rect.width=right-hit.rect.x;
+                }
+                if (!visitor(&hit, context)) return false;
+            }
         }
         x += g->adv - g->cut;
         // 余下的空白按权重分给各个空隙，除不尽的零头散开，不堆在行尾。
@@ -590,7 +634,8 @@ static void draw_line(uint8_t* fb, const line_t* line, int left, int baseline) {
             done += w;
         }
     }
-    if (line->hyphen_adv) ttf_draw_text_px(fb, x, baseline, line->px, "-", EPD_DRAW_ALIGN_LEFT, 0, 15);
+    if (fb && line->hyphen_adv) ttf_draw_text_px(fb, x, baseline, line->px, "-", EPD_DRAW_ALIGN_LEFT, 0, 15);
+    return true;
 }
 
 bool book_layout_build(const char* utf8, size_t len, EpdRect rect, int px) {
@@ -690,17 +735,18 @@ size_t book_layout_page_for_offset(size_t off) {
     return lo;
 }
 
-void book_layout_draw_page(uint8_t* fb, size_t page, EpdRect rect, int px) {
+static bool process_page(uint8_t* fb, size_t page, EpdRect rect, int px,
+                         book_layout_glyph_visitor_t visitor, void* context) {
     memset(s_widths, 0, sizeof(s_widths));
-    if (!fb || page >= book_layout_page_count() || px != s_px || rect.width != s_rect.width ||
+    if ((!fb && !visitor) || page >= book_layout_page_count() || px != s_px || rect.width != s_rect.width ||
         rect.height != s_rect.height || rect.x < 0 || rect.y < 0 ||
-        rect.x > INT_MAX - rect.width || rect.y > INT_MAX - rect.height) return;
+        rect.x > INT_MAX - rect.width || rect.y > INT_MAX - rect.height) return false;
     size_t off = s_pages[page];
     size_t end = page + 1 < s_count ? s_pages[page + 1] : s_len;
     int64_t used = 0;
     while (off < end) {
         line_t line;
-        if (!take_line(off, &line)) return;
+        if (!take_line(off, &line)) return false;
         const size_t next = line.next;
         const bool paragraph_end = line.paragraph_end, heading = line.heading;
         const int line_px = line.px;
@@ -708,24 +754,37 @@ void book_layout_draw_page(uint8_t* fb, size_t page, EpdRect rect, int px) {
         int line_height = row_height(block, line_px);
         int image_width = 0;
         if (block && block->image) image_size(block, &image_width, &line_height);
-        if (used + line_height > rect.height) return;
+        if (used + line_height > rect.height) return false;
         if (image_width) {
-            int left = rect.x + (rect.width - image_width) / 2;
-            for (int y = 0; y < line_height; ++y) for (int x = 0; x < image_width; ++x) {
-                size_t src = (size_t)((int64_t)y * block->image_height / line_height) * block->image_width +
-                             (size_t)((int64_t)x * block->image_width / image_width);
-                epd_draw_pixel(left + x, rect.y + (int)used + y, block->image[src], fb);
+            if (fb) {
+                int left = rect.x + (rect.width - image_width) / 2;
+                for (int y = 0; y < line_height; ++y) for (int x = 0; x < image_width; ++x) {
+                    size_t src = (size_t)((int64_t)y * block->image_height / line_height) * block->image_width +
+                                 (size_t)((int64_t)x * block->image_width / image_width);
+                    epd_draw_pixel(left + x, rect.y + (int)used + y, block->image[src], fb);
+                }
             }
         } else if (block && block->image_src) {
-            if (!s_hide_images) draw_placeholder(fb, block, placeholder_rect(rect, (int)used, line_height));
+            if (fb && !s_hide_images) draw_placeholder(fb, block, placeholder_rect(rect, (int)used, line_height));
         } else if (line.visible > 0) {
-            draw_line(fb, &line, rect.x, rect.y + (int)used + ttf_ascender_px(line_px));
+            int top = rect.y + (int)used;
+            if (!process_line(fb, &line, rect.x, top, top + ttf_ascender_px(line_px), visitor, context)) return false;
         }
         used += line_height;
         if (paragraph_end) used += line_height / (heading ? 2 : 3);
         off = next;
     }
+    return true;
 }
+
+void book_layout_draw_page(uint8_t* fb, size_t page, EpdRect rect, int px) {
+    if (fb) (void)process_page(fb, page, rect, px, NULL, NULL);
+}
+
+bool book_layout_visit_page(size_t page, EpdRect rect, int px, book_layout_glyph_visitor_t visitor, void* context) {
+    return visitor && process_page(NULL, page, rect, px, visitor, context);
+}
+
 size_t book_layout_image_at(size_t page, EpdRect rect, int x, int y, EpdRect* hit) {
     memset(s_widths, 0, sizeof(s_widths));
     if (page >= book_layout_page_count() || rect.width != s_rect.width || rect.height != s_rect.height ||

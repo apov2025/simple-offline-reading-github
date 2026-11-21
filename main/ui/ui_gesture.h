@@ -5,8 +5,8 @@
  * 中文：由主循环喂入触摸快照的纯状态识别器，不解释页面动作。
  * English: Pure state recognizer fed by loop touch snapshots; no page actions.
  *
- * 冻结：翻页不做按下反馈；阈值来自 ui_kit.h；短拖取消以免误翻。
- * Frozen: No press decoration for page turns; thresholds live in ui_kit.h; short drags cancel to avoid accidental turns.
+ * 冻结：翻页不做按下反馈；阈值来自 ui_kit.h；短拖取消以免误翻；页面确认长按命中后才允许拖动。
+ * Frozen: No press decoration for page turns; thresholds live in ui_kit.h; short drags cancel to avoid accidental turns; dragging requires page-confirmed hold selection.
  */
 #pragma once
 #include "app.h"
@@ -20,6 +20,8 @@ typedef enum {
     UI_GESTURE_SWIPE_U, ///< 上滑 / Swipe up
     UI_GESTURE_SWIPE_D, ///< 下滑 / Swipe down
     UI_GESTURE_CANCEL, ///< 取消 / Cancel
+    UI_GESTURE_LONG_RELEASE, ///< 有效长按松手 / Release after a valid hold
+    UI_GESTURE_LONG_DRAG, ///< 授权长按后的移动 / Movement after an opted-in hold
 } ui_gesture_type_t;
 
 typedef struct ui_gesture_event_s {
@@ -36,6 +38,7 @@ typedef struct {
     int64_t t0_ms; ///< 起始时刻 / Start time
     int64_t last_ms; ///< 最近时刻，倒退时取消 / Last time, cancel on clock regression
     bool moved; ///< 曾超出容差 / Has exceeded movement slop
+    bool long_drag; ///< 页面已允许本次长按拖动 / Page enabled dragging for this hold
     bool long_fired; ///< 已发出长按 / Long press emitted
 } ui_gesture_t;
 
@@ -44,3 +47,6 @@ void ui_gesture_reset(ui_gesture_t *gesture);
 /// 每次最多一个事件；consumed、多点或缺失快照取消活动序列。
 /// Emit at most one event; consumed, multitouch or a missing snapshot cancels an active sequence.
 bool ui_gesture_feed(ui_gesture_t *gesture, const app_ctx_t *ctx, ui_gesture_event_t *out);
+
+/// 仅有效长按触发后允许拖动；每次序列结束清除。/ Allow dragging only after a valid hold; cleared at each sequence end.
+void ui_gesture_allow_long_drag(ui_gesture_t *gesture, bool allow);

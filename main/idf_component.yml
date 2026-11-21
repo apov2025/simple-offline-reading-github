@@ -1,2 +1,6 @@
 dependencies:
   espressif/qrcode: "0.2.0"
+  espressif/esp_tinyusb:
+    version: "2.2.0"
+    rules:
+      - if: "target == esp32s3"

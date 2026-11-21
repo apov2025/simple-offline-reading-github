@@ -2,51 +2,25 @@
  * SPDX-FileCopyrightText: 2026 mindreset
  * SPDX-License-Identifier: Apache-2.0
  *
- * 全部 demo 页的清单。菜单顺序。加页只改这张表。
+ * 阅读器产品页清单；首页与旧接口均返回书库。
  *
- * Demo page table. Menu order lives here; adding a page only changes this list.
+ * Reader product page table; home and legacy aliases always return the library.
  */
 
 #include "app_registry.h"
 
 extern const app_desc_t app_reader;
-extern const app_desc_t app_home;
-extern const app_desc_t app_refresh;
-extern const app_desc_t app_reading;
-extern const app_desc_t app_touch;
-extern const app_desc_t app_axis;
-extern const app_desc_t app_axis_lab;
-extern const app_desc_t app_power;
-extern const app_desc_t app_pmu;
-extern const app_desc_t app_key;
-extern const app_desc_t app_sleep;
-extern const app_desc_t app_sd;
-extern const app_desc_t app_font_pick;
-extern const app_desc_t app_ioe;
-extern const app_desc_t app_selftest;
-extern const app_desc_t app_book;
-extern const app_desc_t app_transfer;
+#if !READER_METALIO
+extern const app_desc_t app_wifi_transfer;
+extern const app_desc_t app_usb_transfer;
+#endif
 
-// 一份菜单，相近的页挨着排，由 ui_menu 按页翻。/ One menu, similar pages together; ui_menu pages through it.
+// 仅注册阅读器产品页，demo 不进入产品构建。/ Register product pages only; demos are excluded from product builds.
 static const app_desc_t* const s_apps[] = {
     &app_reader,
 #if !READER_METALIO
-    &app_home,
-    &app_refresh,
-    &app_reading,
-    &app_touch,
-    &app_axis,
-    &app_axis_lab,
-    &app_power,
-    &app_pmu,
-    &app_key,
-    &app_sleep,
-    &app_sd,
-    &app_font_pick,
-    &app_ioe,
-    &app_selftest,
-    &app_book,
-    &app_transfer,
+    &app_wifi_transfer,
+    &app_usb_transfer,
 #endif
 };
 
@@ -73,17 +47,9 @@ const app_desc_t* app_reader_page(void) {
 }
 
 const app_desc_t* app_home_page(void) {
-#if READER_METALIO
     return &app_reader;
-#else
-    return &app_home;
-#endif
 }
 
 const app_desc_t* app_selftest_page(void) {
-#if READER_METALIO
     return &app_reader;
-#else
-    return &app_selftest;
-#endif
 }

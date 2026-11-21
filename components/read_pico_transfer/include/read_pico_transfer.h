@@ -78,3 +78,10 @@ esp_err_t read_pico_transfer_forget_wifi(void);
 esp_err_t read_pico_transfer_scan_wifi(read_pico_transfer_network_t out[READ_PICO_TRANSFER_SCAN_MAX], size_t *count);
 /// 停服后保存设备输入的凭据，不自动连接；密码校验与网页相同。/ Save device-entered credentials while stopped without connecting; validation matches the webpage.
 esp_err_t read_pico_transfer_save_wifi(const char *ssid, const char *password);
+
+/// 校时专用网络租约：仅停服且无扫描/配置时借出凭据；失败时输出清零，不启动HTTP。
+/// Clock-only radio lease: acquire saved credentials only while stopped, not scanning/configuring; zero outputs on failure, no HTTP.
+esp_err_t read_pico_transfer_clock_acquire(char ssid[33], char password[65]);
+/// 仅在校时已停SNTP、WiFi并销毁其网络资源后释放；不得释放传书会话。
+/// Release only after clock SNTP/WiFi/netif cleanup; never releases a transfer session.
+void read_pico_transfer_clock_release(void);

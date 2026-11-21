@@ -58,40 +58,41 @@ static void use_scan_for(const EpdWaveform* waveform, enum EpdDrawMode mode) {
     epd_lcd_set_prefill_lines(s_bulk_io ? 127 : (fast ? 64 : 32));
 }
 
-// 自上次 GC16 以来的差分刷（DU/GL16）次数。
-// Soft (DU/GL16) updates since the last GC16.
+// 自上次成功整页GC16以来的整页差分刷次数；局部维护不计。
+// Full-page soft updates since the last successful full-page GC16; local maintenance is excluded.
 static int s_soft_refreshes;
 
-// 所有按 fb 刷屏的出口都经这里。GL16 必须全像素（白底补 1 帧靠它打到）。
-// 差分刷攒够 APP_GC16_EVERY 次就把这一次升为全像素 GC16：区域、fb 都不变，只换模式，
-// 屏上内容仍由 fb 决定，不会丢；全像素是为了让未变化像素也过一遍 LUT，否则压不掉灰底。
-// 跟随 DU 波形只有 DU 一张表，不计数也不升级。
-// Every fb present goes through here. GL16 must be full-pixel (the extra white
-// frame depends on that). After APP_GC16_EVERY soft updates, this one is
-// promoted to full-pixel GC16: area and fb stay the same, only the mode
-// changes, so content is not lost. Full-pixel is so unchanged pixels also run
-// the LUT; otherwise the gray floor will not clear. FOLLOW DU has only a DU
-// table and does not count or promote.
+// GL16 全像素保证白底清理；成功整页软刷达到周期后升级整页GC16。
+// GL16 uses all pixels to clean white; successful full-page soft updates promote to GC16 at the interval.
+// 局部更新和跟随DU不计入整页周期。/ Local updates and FOLLOW DU do not participate in the full-page cycle.
 static enum EpdDrawError hl_update(
     EpdiyHighlevelState* hl, const EpdWaveform* waveform, enum EpdDrawMode mode, bool full,
     const EpdRect* area
 ) {
     full = full || (mode & 0xF) == MODE_GL16;
-    if (waveform != &E0470_FOLLOW_WAVEFORM) {
-        if ((mode & 0xF) == MODE_GC16) {
-            s_soft_refreshes = 0;
-        } else if (APP_GC16_EVERY > 0 && ++s_soft_refreshes >= APP_GC16_EVERY) {
-            s_soft_refreshes = 0;
-            mode = (enum EpdDrawMode)((mode & ~0xF) | MODE_GC16);
-            full = true;
-            ESP_LOGI(TAG, "promote to GC16 after %d soft refreshes", APP_GC16_EVERY);
+    // 局部维护不消耗整页清理周期，也不能冒充整页清理完成。/ Local maintenance neither consumes nor resets the full-page cleaning cycle.
+    const bool count_page = waveform != &E0470_FOLLOW_WAVEFORM && area == NULL;
+    int next_count=s_soft_refreshes;
+    if(count_page) {
+        if((mode & 0xF)==MODE_GC16)next_count=0;
+        else if(APP_GC16_EVERY>0 && ++next_count>=APP_GC16_EVERY) {
+            next_count=0;mode=(enum EpdDrawMode)((mode & ~0xF)|MODE_GC16);full=true;
+            ESP_LOGI(TAG,"promote to GC16 after %d soft refreshes",APP_GC16_EVERY);
         }
     }
-    if (area != NULL) {
-        return full ? epd_hl_update_area_full(hl, mode, 25, *area)
-                    : epd_hl_update_area(hl, mode, 25, *area);
-    }
-    return full ? epd_hl_update_screen_full(hl, mode, 25) : epd_hl_update_screen(hl, mode, 25);
+    enum EpdDrawError result;
+    if(area!=NULL)result=full?epd_hl_update_area_full(hl,mode,25,*area):epd_hl_update_area(hl,mode,25,*area);
+    else result=full?epd_hl_update_screen_full(hl,mode,25):epd_hl_update_screen(hl,mode,25);
+    if(count_page && result==0)s_soft_refreshes=next_count;
+    return result;
+}
+
+// 恢复原厂 DU 路径，不预先改写灰阶目标。/ Restore the vendor DU path without thresholding the target.
+enum EpdDrawError update_display_reader_fast(EpdiyHighlevelState* hl) {
+    use_scan_for(&E0470_WAVEFORM,MODE_DU);
+    epd_poweron();
+    enum EpdDrawError result=hl_update(hl,&E0470_WAVEFORM,MODE_DU,false,NULL);
+    rails_keepalive();return result;
 }
 
 enum EpdDrawError update_display_mode(
@@ -112,7 +113,7 @@ enum EpdDrawError update_display_from_white_with(
     epd_hl_waveform(hl, waveform);
     enum EpdDrawError result = epd_hl_update_screen_from_white(hl, mode, 25);
     epd_hl_waveform(hl, &E0470_WAVEFORM);
-    s_soft_refreshes = 0;
+    if(result==0)s_soft_refreshes = 0;
     rails_keepalive();
     return result;
 }
@@ -188,8 +189,8 @@ void guard_draw_result(EpdiyHighlevelState* hl, enum EpdDrawError result) {
     epd_clear();
     // 清物理屏后仅重置旧帧基准，保留目标页；否则局部刷新会留下整页白屏。
     // Reset only the old-frame baseline after clearing; preserving the target prevents blank pages after partial updates.
-    epd_hl_update_screen_from_white(hl, MODE_GC16, 25);
-    s_soft_refreshes = 0;
+    enum EpdDrawError recovery=epd_hl_update_screen_from_white(hl, MODE_GC16, 25);
+    if(recovery==0)s_soft_refreshes = 0;
     rails_keepalive();
     ESP_LOGW(TAG, "line queue underrun, pclk back to %d MHz", DISPLAY_PCLK_SAFE_MHZ);
 }

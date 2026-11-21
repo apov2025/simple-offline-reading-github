@@ -41,6 +41,8 @@ bool app_lock_powers_down(void);
 /// image's format); NULL restores the built-in one. Only the pointer is kept, so the caller keeps the
 /// memory alive while it may be shown and passes NULL before freeing it.
 void app_lock_set_image(const uint8_t* image_4bpp);
+/// 页面是否持有优先锁屏图；不暴露图像指针。/ Whether a page owns a priority lock image, without exposing its pointer.
+bool app_lock_has_image(void);
 
 void enter_lock_and_sleep(
     EpdiyHighlevelState* hl, int64_t* ignore_until_ms, sc7a20h_handle_t acc

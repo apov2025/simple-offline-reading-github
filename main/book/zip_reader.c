@@ -16,6 +16,9 @@
  *   - one entry over the extraction limit (typically a multi-megabyte image) no longer rejects the
  *     file; only extracting that entry fails.
  */
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
 #include "zip_reader.h"
 #include <limits.h>
 #include <stdbool.h>
@@ -23,6 +26,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include "esp_heap_caps.h"
 #include "miniz.h"
 
@@ -117,10 +122,12 @@ esp_err_t zip_open(const char* path, zip_reader_t** out) {
     uint8_t* tail = NULL;
     z->file = fopen(path, "rb");
     if (!z->file) { err = ESP_ERR_NOT_FOUND; goto fail; }
-    if (fseek(z->file, 0, SEEK_END)) goto fail;
-    long size = ftell(z->file);
-    if (size < 22 || (uint64_t)size > UINT32_MAX || (uint64_t)size > INT32_MAX) goto fail;
-    z->size = (uint32_t)size;
+    // 从已打开文件取长度，避免为量大小走到文件尾。/ Read open-file metadata without seeking to EOF.
+    struct stat info;
+    if (fstat(fileno(z->file), &info)) goto fail;
+    if (info.st_size < 22 || (uint64_t)info.st_size > UINT32_MAX ||
+        (uint64_t)info.st_size > INT32_MAX) goto fail;
+    z->size = (uint32_t)info.st_size;
     size_t tail_len = z->size < 66U * 1024U ? z->size : 66U * 1024U;
     tail = heap_caps_malloc(tail_len, PSRAM);
     if (!tail) { err = ESP_ERR_NO_MEM; goto fail; }

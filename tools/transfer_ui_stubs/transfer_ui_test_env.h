@@ -16,13 +16,14 @@ typedef int esp_err_t;
 #define ESP_OK 0
 #define ESP_FAIL -1
 #define ESP_ERR_INVALID_ARG 0x102
+#define ESP_ERR_INVALID_STATE 0x103
 typedef struct { int x,y,width,height; } EpdRect;
 typedef enum { APP_REDRAW_NONE, APP_REDRAW_AREA, APP_REDRAW_PAGE, APP_REDRAW_FULL, APP_REDRAW_DONE } app_redraw_t;
 struct app_desc;
 typedef struct { uint8_t* fb; void* hl; bool consumed; int64_t now_ms; const struct app_desc* request_app; bool request_return; } app_ctx_t;
 typedef enum { UI_GESTURE_PRESS, UI_GESTURE_TAP, UI_GESTURE_CANCEL, UI_GESTURE_LONG_PRESS } ui_gesture_type_t;
 typedef struct { ui_gesture_type_t type; uint16_t x,y,x0,y0; } ui_gesture_event_t;
-typedef struct app_desc { const char *title,*detail; bool enter_full; void(*on_enter)(app_ctx_t*); void(*on_exit)(app_ctx_t*); void(*on_media_lost)(app_ctx_t*); void(*render)(app_ctx_t*,uint8_t*); bool(*present)(app_ctx_t*,app_redraw_t); app_redraw_t(*on_tick)(app_ctx_t*); app_redraw_t(*on_gesture)(app_ctx_t*,const ui_gesture_event_t*); } app_desc_t;
+typedef struct app_desc { const char *title,*detail; bool enter_full,blocks_idle_sleep,blocks_power_lock,owns_keys,no_menu; app_redraw_t(*on_key)(app_ctx_t*,int); void(*on_enter)(app_ctx_t*); void(*on_exit)(app_ctx_t*); void(*on_media_lost)(app_ctx_t*); void(*render)(app_ctx_t*,uint8_t*); bool(*present)(app_ctx_t*,app_redraw_t); app_redraw_t(*on_tick)(app_ctx_t*); app_redraw_t(*on_gesture)(app_ctx_t*,const ui_gesture_event_t*); } app_desc_t;
 enum EpdDrawMode { MODE_DU,MODE_GL16,MODE_GC16 };
 #define UI_MARGIN 40
 #define UI_CONTENT_TOP 176
@@ -58,7 +59,8 @@ static inline void ui_draw_header(uint8_t* f,...) {(void)f;}
 static inline void ui_draw_button(uint8_t* f,...) {(void)f;}
 static inline void ui_draw_pressed_round_rect(uint8_t* f,...) {(void)f;}
 static inline void ui_draw_round_rect(uint8_t* f,...) {(void)f;}
-static inline void ui_draw_menu_handle(uint8_t* f,...) {(void)f;}
+static int test_menu_draws;
+static inline void ui_draw_menu_handle(uint8_t* f,...) {(void)f;++test_menu_draws;}
 static inline void ui_hairline(uint8_t* f,...) {(void)f;}
 static inline void ui_text(uint8_t* f,...) {(void)f;}
 static inline void ui_text_vc(uint8_t* f,...) {(void)f;}
@@ -78,6 +80,9 @@ static inline int book_store_upload_root(book_store_root_t* r) {strcpy(r->path,"
 static inline size_t book_store_file_limit(void* r) {(void)r;return 1000000;}
 static int test_store_changes;
 static inline void book_store_notify_changed(void) { ++test_store_changes; }
+enum { UI_KEY_1=0, UI_KEY_2=1, UI_KEY_3=2 };
+static const app_desc_t test_reader_page = {.title="reader"};
+static inline const app_desc_t* app_reader_page(void) {return &test_reader_page;}
 static inline int app_count(void) {return 0;}
 static inline const app_desc_t* app_at(int i) {(void)i;return NULL;}
 typedef enum {READ_PICO_TRANSFER_MODE_AP,READ_PICO_TRANSFER_MODE_STA} read_pico_transfer_mode_t;
@@ -94,11 +99,14 @@ static int test_scan_error, test_save_count;
 static size_t test_scan_count = 8;
 static char test_saved_ssid[33];
 static inline bool read_pico_transfer_try_stop_if_idle(void) {return !test_busy;}
-static int test_stop_count;
-static inline void read_pico_transfer_stop(void) { ++test_stop_count; }
+static int test_stop_count, test_start_count, test_start_error;
+static read_pico_transfer_mode_t test_started_mode;
+static app_ctx_t* test_stop_context;
+static bool test_stop_order_ok;
+static inline void read_pico_transfer_stop(void) { ++test_stop_count; if (test_stop_context) test_stop_order_ok = !test_stop_context->request_app && test_font_suspended; }
 static inline void read_pico_transfer_get_status(read_pico_transfer_status_t* s) {*s=test_status;}
 static inline int read_pico_transfer_get_saved_wifi(char* s,bool* c) {strcpy(s,test_configured?"saved":"");*c=test_configured;return 0;}
-static inline int read_pico_transfer_start(const read_pico_transfer_cfg_t* c) {if (!test_font_suspended || !c->file_changed_cb || c->file_changed_cb("/flash/books/test.txt")) return ESP_FAIL;return 0;}
+static inline int read_pico_transfer_start(const read_pico_transfer_cfg_t* c) { ++test_start_count; test_started_mode=c->mode; if (!test_font_suspended || !c->file_changed_cb || c->file_changed_cb("/flash/books/test.txt")) return ESP_FAIL; return test_start_error; }
 static inline void read_pico_transfer_service_poll(void) {}
 static inline int read_pico_transfer_save_wifi(const char* s,const char* p) {(void)p;test_save_count++;snprintf(test_saved_ssid,33,"%s",s);return test_save_error;}
 static inline int read_pico_transfer_scan_wifi(read_pico_transfer_network_t* out,size_t* count) {*count=test_scan_error?0:test_scan_count;for(size_t i=0;i<*count;i++){out[i]=(read_pico_transfer_network_t){.supported=true,.requires_password=true};snprintf(out[i].ssid,33,"network%u",(unsigned)i);}if(*count)snprintf(out[0].ssid,33,"中文家庭网络");return test_scan_error;}

@@ -10,9 +10,9 @@
  * level until the library, right = one full refresh to clear ghosting.
  *
  * 冻结：书库是 EPUB 的文字列表，来源是卡上的 /sdcard/books（或 /sdcard/book）加机身自带的 /flash/books；
- * 不做封面、搜索、管理；排序见下面"最近阅读"一条。
+ * 不做封面、搜索；新增用户要求的隐藏/恢复筛选，排序见下面"最近阅读"一条。
  * Frozen: the library is a plain text list of EPUBs from /sdcard/books (or /sdcard/book) on the card plus
- * the built-in /flash/books; no covers, search or management; for ordering see the "most recently read" entry below.
+ * the built-in /flash/books; no covers or search; user-requested hiding/restoration filters the list; for ordering see the "most recently read" entry below.
  * 冻结：机身自带一个中英文都全的字体和几本书（storage 分区，见 builtin/），不插卡开机就能读。
  * 原先要求"用户自己备字体和书才能用"，提出者认为太麻烦，所以改成自带。"开始使用"引导页只在
  * 一本书都没有时出现（内置内容丢了又没插卡）。
@@ -55,10 +55,12 @@
  * Frozen: locking while reading leaves the book's cover on the screen. The cover is made ahead of time by
  * the desktop preparation tool and stored in the book (a full-screen gray image); the device only draws
  * it and decodes nothing. Unprepared books, and locking from the library, keep the built-in lock image.
- * 冻结：设置面板是一层平铺的选项（字号、字体、刷新），点一下即生效，不进子菜单。
- * Frozen: the settings panel is one flat sheet of choices (size, font, refresh); one tap applies, no submenus.
- * 冻结：屏幕上不画按钮和菜单把手；演示菜单只在书库页长按中键进入。
- * Frozen: no on-screen buttons or menu handle; the demo menu opens only by long-pressing the middle key in the library.
+ * 冻结：设置仍平铺；用户要求目录改为正文顶部下拉调出，移除设置中的目录入口。
+ * Frozen: settings stay flat; the user requests a top-edge pull-down TOC instead of a settings entry.
+ * 冻结：书库顶部下拉用紧凑面板显示设备、固件名称/版本、电池及小纸 USB传输开关；书库本身不显示电池。
+ * Frozen: the library top drawer shows device, firmware name/version, battery and the Pico USB switch; no battery on the library itself.
+ * 冻结：正文和书库不画按钮和菜单把手；设备信息抽屉按用户要求提供触控 USB开关。按用户要求移除演示入口，Wi-Fi/USB 传书均为阅读器页面。
+ * Frozen: no buttons or menu handle on reading/library; the device drawer has the user-requested USB switch. Demo entry is removed at user request; Wi-Fi/USB transfers are reader pages.
  * 冻结：Pico 不带截图，Metalio 按用户要求启用独占命名的 SD 截图。
  * Frozen: Pico screenshots remain off; Metalio saves exclusive SD screenshots at user request.
  * 原因：真机上试过：截图后卡会掉线。直接原因是写完后误调了 read_pico_sd_sync()
@@ -70,9 +72,8 @@
  * were also warned that an EPD refresh and TF card I/O interfere when they overlap, and the vendor
  * code does reserve scan margin during transfers (display_set_bulk_io). The code stays behind
  * READER_SCREENSHOT; before turning it back on, verify "finish the write, then refresh" on hardware.
- * 冻结：TF 卡只放用户内容：books 和 fonts 两个文件夹，缺了开机自动建；进度和设置存机身。
- * Frozen: the TF card holds user content only, in books and fonts, created at boot when missing;
- * progress and settings live on the device.
+ * 冻结：TF 卡 books/fonts 放书与字体，dict 放词库；用户要求单词本存 notes，进度和设置仍存机身。
+ * Frozen: SD books/fonts hold books and fonts, dict holds dictionaries, and the user-requested notebook lives in notes; progress and settings stay on device.
  * 冻结：默认字体是机身自带的那个；卡上的字体只是面板里的可选项，不再替用户自动挑卡上的字体
  * （已经存下的选择照旧生效）。卡拔掉时，卡上的字体退回机身字体，机身里的书可以接着读。
  * Frozen: the default font is the built-in one; card fonts are just choices in the panel and are no longer
@@ -90,6 +91,19 @@
 #include <time.h>
 
 #include "app.h"
+#include "ui_device_panel.h"
+#if !READER_METALIO
+#include "board/reader_wallpaper.h"
+#endif
+#if !READER_METALIO
+#include "dictionary/reader_dictionary_ui.h"
+#include "annotations/reader_highlight_ui.h"
+#include "dictionary/reader_vocabulary_ui.h"
+extern const app_desc_t app_usb_transfer;
+extern const app_desc_t app_wifi_transfer;
+#include "board/reader_clock.h"
+#include "book_visibility.h"
+#endif
 #include "book_layout.h"
 #include "book_policy.h"
 #include "book_progress.h"
@@ -106,6 +120,8 @@
 
 #include "../board/reader_media.h"
 #include "settings.h"
+#include "../board/reader_battery.h"
+#include "esp_app_desc.h"
 #if READER_METALIO
 #include "board/reader_board.h"
 #include "board/reader_controls.h"
@@ -182,6 +198,49 @@ typedef struct {
 } lib_entry_t;
 
 static view_t s_view;
+#if !READER_METALIO
+static char s_clock_date[16],s_clock_time[8];
+static reader_clock_status_t s_clock_status;
+static bool s_clock_redraw;
+static const app_desc_t *s_clock_next_app;
+static const char *clock_feedback(void) {
+    if(s_clock_status.active && s_clock_status.state==READER_CLOCK_ERROR)return "网络异常，请重启";
+    if(s_clock_next_app)return "正在结束校时";
+    switch(s_clock_status.state) {
+    case READER_CLOCK_CONNECTING:return "正在连接";
+    case READER_CLOCK_SYNCING:return "正在校准";
+    case READER_CLOCK_SUCCESS:return s_clock_status.rtc_retained?"已校准":"已校准，本次有效";
+    case READER_CLOCK_NO_WIFI:return "请先设置Wi-Fi";
+    case READER_CLOCK_TIMEOUT:return "超时，请重试";
+    case READER_CLOCK_ERROR:return "校准失败，请重试";
+    case READER_CLOCK_BUSY:return "Wi-Fi正在使用";
+    case READER_CLOCK_CANCELLED:return "已取消";
+    default:return "";
+    }
+}
+static void clock_snapshot(void) {
+    char date[16],clock[8];reader_clock_status_t next;
+    reader_clock_get_status(&next);reader_clock_format(date,sizeof(date),clock,sizeof(clock));
+    if(strcmp(date,s_clock_date) || strcmp(clock,s_clock_time) || next.state!=s_clock_status.state ||
+       next.active!=s_clock_status.active || next.rtc_retained!=s_clock_status.rtc_retained)s_clock_redraw=true;
+    memcpy(s_clock_date,date,sizeof(date));memcpy(s_clock_time,clock,sizeof(clock));s_clock_status=next;
+}
+#endif
+static bool s_toc;
+static size_t s_toc_page;
+static size_t s_toc_current=SIZE_MAX;
+static bool s_info;
+#if !READER_METALIO
+static bool s_lookup_mode;
+static bool s_hidden_library, s_open_hidden;
+static bool s_library_action;
+static char s_library_action_path[PATH_BYTES],s_library_action_title[NAME_BYTES];
+static unsigned s_header_taps;
+static int64_t s_header_tap_ms;
+#endif
+typedef enum { SURFACE_LIBRARY,SURFACE_BODY,SURFACE_MENU,SURFACE_TOC,SURFACE_INFO,SURFACE_DICTIONARY,SURFACE_VOCABULARY } reader_surface_t;
+static reader_surface_t s_presented_surface=SURFACE_LIBRARY;
+static ui_battery_t s_battery;
 static bool s_menu;        // 设置面板开着 / settings panel open
 static bool s_force_full;  // 下一次整页用全刷 / next page present is a full refresh
 static char s_notice[128];
@@ -222,6 +281,10 @@ static unsigned s_card_retry_count;
 static int64_t s_toast_until_ms;
 static int64_t s_work_started_us;  // 用户操作到刷新结束的计时 / user action through completed refresh
 static int64_t s_idle_after_ms;    // 最近操作后短暂让出后台工作 / briefly defer background work after input
+#if !READER_METALIO
+static bool s_dict_was_selecting;
+static bool s_dict_restored;  // 关闭词典后下一次呈现保留原帧。/ Preserve the restored frame for the next presentation after closing.
+#endif
 static bool s_mid_long_armed;  // 中键这次按下发生在书库且面板没开 / this middle press began in the library with the panel closed
 
 /* ---- 小工具 / helpers ---- */
@@ -436,7 +499,8 @@ static void entry_meta(const lib_entry_t* item, book_meta_t* meta) {
 }
 
 static int entry_text_width(const lib_entry_t* item) {
-    return ui_content_width() - (item->started ? 96 : 0);
+    (void)item;
+    return ui_content_width();
 }
 
 static uint32_t utf8_at(const char* p, size_t* n) {
@@ -632,6 +696,11 @@ static void library_scan(void) {
             struct stat st;
             snprintf(path, sizeof(path), "%s/%s", k_book_dirs[d], item->name);
             if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) continue;
+#if !READER_METALIO
+            bool hidden=true;
+            if(book_visibility_get(path,&hidden)!=ESP_OK) {copy_text(s_notice,sizeof(s_notice),"书库设置读取失败");continue;}
+            if(hidden!=s_hidden_library)continue;
+#endif
             book_progress_t progress = { 0 };
             if (book_progress_load(path, (uint32_t)st.st_size, &progress)) {
                 item->started = true;
@@ -663,7 +732,7 @@ static void library_scan(void) {
 // The "getting started" page shown instead of an empty library. Three steps, each with its current status on the right.
 static void draw_onboarding(uint8_t* fb) {
     ui_clear_page(fb);
-    ui_text(fb, UI_MARGIN, 36, UI_PX_TITLE, "开始使用", EPD_DRAW_ALIGN_LEFT, false);
+    ui_text_vc(fb, UI_MARGIN, 80, UI_PX_TITLE, "开始使用", EPD_DRAW_ALIGN_LEFT, false);
     ui_hairline(fb, 128, UI_MARGIN, ui_content_width(), UI_GRAY_BLACK);
 
     char fonts[32], books[32];
@@ -709,16 +778,20 @@ static void draw_library(uint8_t* fb) {
         ui_text(fb, UI_LOCK_WIDTH / 2, UI_LOCK_HEIGHT / 2 - 24, UI_PX_BODY, "正在读取…", EPD_DRAW_ALIGN_CENTER, false);
         return;
     }
-    if (s_book_n == 0) {
-        draw_onboarding(fb);
-        return;
-    }
+#if READER_METALIO
+    if (s_book_n == 0) {draw_onboarding(fb);return;}
+#endif
     ui_clear_page(fb);
-    ui_text(fb, UI_MARGIN, 36, UI_PX_TITLE, "书库", EPD_DRAW_ALIGN_LEFT, false);
+    ui_text_vc(fb, UI_MARGIN, 80, UI_PX_TITLE,
+#if !READER_METALIO
+        s_hidden_library?"隐藏书库":
+#endif
+        "书库", EPD_DRAW_ALIGN_LEFT, false);
+    if(!s_book_n)ui_text_vc(fb,UI_LOCK_WIDTH/2,300,UI_PX_BODY,"暂无书籍",EPD_DRAW_ALIGN_CENTER,false);
     if (s_book_n > 0) {
         char count[32];
         snprintf(count, sizeof(count), "%d 本", s_book_n);
-        ui_text(fb, ui_content_right(), 66, UI_PX_CAPTION, count, EPD_DRAW_ALIGN_RIGHT, false);
+        ui_text_vc(fb, ui_content_right(), 80, UI_PX_CAPTION, count, EPD_DRAW_ALIGN_RIGHT, false);
     }
     ui_hairline(fb, 128, UI_MARGIN, ui_content_width(), UI_GRAY_BLACK);
     // 提示（打不开的书、没有字体）写在标题行右侧的数量下面那一行之外：放在标题和分隔线之间的右侧。
@@ -727,7 +800,7 @@ static void draw_library(uint8_t* fb) {
         char note[128];
         copy_text(note, sizeof(note), s_notice);
         fit_text(note, READ_FOOTER_PX, ui_content_width() - 220);
-        ui_text(fb, UI_MARGIN + 150, 70, READ_FOOTER_PX, note, EPD_DRAW_ALIGN_LEFT, false);
+        ui_text(fb, UI_MARGIN + 150, 98, READ_FOOTER_PX, note, EPD_DRAW_ALIGN_LEFT, false);
     }
     lib_row_t rows[LIB_ROWS];
     const int n = page_rows(rows);
@@ -737,11 +810,6 @@ static void draw_library(uint8_t* fb) {
         book_meta_t meta;
         entry_meta(item, &meta);
         const int text_w = entry_text_width(item);
-        if (item->started) {
-            char pct[8];
-            snprintf(pct, sizeof(pct), "%u%%", (unsigned)item->pct);
-            ui_text_vc(fb, ui_content_right(), y + h / 2, UI_PX_CAPTION, pct, EPD_DRAW_ALIGN_RIGHT, false);
-        }
         // 书名放不下一行就折行（最多三行），这一栏跟着变高；作者和年份在书名下面。
         // A title too long for one line wraps (up to three lines) and its row grows; author and year sit below.
         char lines[LIB_TITLE_LINES][NAME_BYTES];
@@ -827,23 +895,45 @@ static unsigned percent(size_t page) {
     return (unsigned)((uint64_t)off * 100 / total);
 }
 
+#if !READER_METALIO
+// 两个线条图标与页码共用中心线，不依赖字体字形。/ Two stroke icons share the page-number centerline and need no font glyph.
+static void draw_read_mode(uint8_t *fb,int x,int y) {
+ if(s_lookup_mode) {
+  epd_draw_circle(x+9,y-2,6,UI_GRAY_BLACK,fb);epd_draw_circle(x+9,y-2,5,UI_GRAY_BLACK,fb);
+  epd_draw_line(x+14,y+3,x+21,y+10,UI_GRAY_BLACK,fb);epd_draw_line(x+13,y+3,x+20,y+10,UI_GRAY_BLACK,fb);
+ } else {
+  epd_draw_line(x+5,y+5,x+16,y-6,UI_GRAY_BLACK,fb);epd_draw_line(x+7,y+7,x+18,y-4,UI_GRAY_BLACK,fb);
+  epd_draw_line(x+16,y-6,x+18,y-4,UI_GRAY_BLACK,fb);epd_draw_line(x+5,y+5,x+4,y+8,UI_GRAY_BLACK,fb);
+  epd_draw_line(x+4,y+8,x+7,y+7,UI_GRAY_BLACK,fb);epd_fill_rect((EpdRect){x+3,y+11,19,2},UI_GRAY_BLACK,fb);
+ }
+}
+#endif
 static void draw_reading(uint8_t* fb) {
     ui_clear_page(fb);
     book_layout_draw_page(fb, s_page, body_rect(), s_px);
-    // 页脚：左边章节名，右边"本章页码 · 全书百分比"。排版没跑完时总页数先写省略号。
-    // Footer: chapter title on the left, "page in chapter · percent of book" on the right. Total pages show an ellipsis until pagination finishes.
+#if !READER_METALIO
+    reader_highlight_ui_marks(fb,s_page,body_rect(),s_px);
+#endif
+    // 页脚：左边章节名，右边本章页码，不显示百分比。排版未完成时总页数写省略号。
+    // Footer: chapter title at left and chapter page numbers at right, without percentages. Total pages use an ellipsis until pagination finishes.
     char right[48], left[160];
     if (book_layout_complete()) {
-        snprintf(right, sizeof(right), "%u/%u · %u%%", (unsigned)s_page + 1, (unsigned)book_layout_page_count(), percent(s_page));
+        snprintf(right, sizeof(right), "%u/%u", (unsigned)s_page + 1, (unsigned)book_layout_page_count());
     } else {
-        snprintf(right, sizeof(right), "%u/… · %u%%", (unsigned)s_page + 1, percent(s_page));
+        snprintf(right, sizeof(right), "%u/…", (unsigned)s_page + 1);
     }
     const int y = UI_LOCK_HEIGHT - READ_FOOTER_H + 26;
+    const int battery_w=ui_battery_low(&s_battery)?UI_BATTERY_WIDTH:0;
     const int right_w = ttf_text_width_px(READ_FOOTER_PX, right);
     copy_text(left, sizeof(left), s_chapter_title);
-    fit_text(left, READ_FOOTER_PX, ui_content_width() - right_w - 32);
-    ui_text(fb, UI_MARGIN, y, READ_FOOTER_PX, left, EPD_DRAW_ALIGN_LEFT, false);
-    ui_text(fb, ui_content_right(), y, READ_FOOTER_PX, right, EPD_DRAW_ALIGN_RIGHT, false);
+    const int mode_w=READER_METALIO?0:34;
+    fit_text(left, READ_FOOTER_PX, ui_content_width() - right_w - battery_w - mode_w - 32);
+    ui_text_vc(fb, UI_MARGIN, y+16, READ_FOOTER_PX, left, EPD_DRAW_ALIGN_LEFT, false);
+    ui_text_vc(fb, ui_content_right()-battery_w, y+16, READ_FOOTER_PX, right, EPD_DRAW_ALIGN_RIGHT, false);
+    if(battery_w)ui_battery_draw(fb,ui_content_right()-UI_BATTERY_WIDTH,y,&s_battery);
+#if !READER_METALIO
+    draw_read_mode(fb,ui_content_right()-battery_w-right_w-mode_w,y+16);
+#endif
 }
 
 static void save_progress(void) {
@@ -861,6 +951,14 @@ static void save_progress(void) {
 }
 
 static void free_book(void) {
+#if !READER_METALIO
+    reader_highlight_ui_reset();s_lookup_mode=false;s_open_hidden=false;
+#endif
+#if !READER_METALIO
+    reader_highlight_ui_close();reader_dict_ui_close();reader_vocabulary_ui_close();s_dict_restored=false;
+#endif
+    s_info=false;
+    s_toc=false;
     // 先让锁屏不再指着封面，再释放。/ Point the lock screen away from the cover before freeing it.
     app_lock_set_image(NULL);
     free(s_cover);
@@ -917,6 +1015,9 @@ static bool load_chapter(size_t chapter, size_t offset, bool last_page) {
     if (book_chapter_title(chapter, s_chapter_title, sizeof(s_chapter_title)) != ESP_OK || !s_chapter_title[0]) {
         copy_text(s_chapter_title, sizeof(s_chapter_title), s_book_title);
     }
+#if !READER_METALIO
+    reader_highlight_ui_chapter(s_path,s_book_title,s_file_size,s_chapter,s_chapter_title,s_text,s_text_len);
+#endif
     return true;
 }
 
@@ -944,15 +1045,20 @@ static void back_to_library(const char* notice) {
 
 static bool load_text_chapter(size_t chapter, size_t offset, bool last_page, int dir);
 
-static app_redraw_t open_book(app_ctx_t* ctx, int index, bool feedback) {
-    if (index < 0 || index >= s_book_n) return APP_REDRAW_NONE;
+static app_redraw_t open_book_path(app_ctx_t* ctx,const char *path,lib_entry_t *entry,bool feedback) {
+    bool manual=entry==NULL;
+#if !READER_METALIO
+    bool hidden=false;
+    if(!manual && (book_visibility_get(path,&hidden)!=ESP_OK || (hidden && !s_hidden_library))) {
+        copy_text(s_notice,sizeof(s_notice),"无法打开这本书");return APP_REDRAW_PAGE;
+    }
+    s_lookup_mode=false;
+#endif
     s_work_started_us = esp_timer_get_time();
     s_resume_pending = false;
-    char path[PATH_BYTES];
-    snprintf(path, sizeof(path), "%s/%s", k_book_dirs[s_books[index].dir], s_books[index].name);
     struct stat st;
     if (stat(path, &st) != 0 || !S_ISREG(st.st_mode) || (uint64_t)st.st_size > UINT32_MAX) {
-        copy_text(s_notice, sizeof(s_notice), "打不开这本书，请检查 TF 卡");
+        copy_text(s_notice, sizeof(s_notice), manual?"使用说明暂不可用，请更新固件":"打不开这本书，请检查 TF 卡");
         return APP_REDRAW_PAGE;
     }
     // 解析大书要一会儿，先给个回应。/ Parsing a large book takes a moment; acknowledge the tap first.
@@ -962,12 +1068,14 @@ static app_redraw_t open_book(app_ctx_t* ctx, int index, bool feedback) {
     const esp_err_t err = book_open(path);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "open failed: %s", esp_err_to_name(err));
-        copy_text(s_notice, sizeof(s_notice), err == ESP_ERR_NO_MEM ? "内存不足，打不开这本书" : "这本书的格式读不了");
+        copy_text(s_notice, sizeof(s_notice), err == ESP_ERR_NO_MEM ? "内存不足，打不开这本书" : manual?"使用说明文件损坏，请更新固件":"这本书的格式读不了");
         return APP_REDRAW_PAGE;
     }
     copy_text(s_path, sizeof(s_path), path);
-    entry_load_meta_from(&s_books[index], true);
-    copy_text(s_book_title, sizeof(s_book_title), s_books[index].title);
+    if(entry) {
+        entry_load_meta_from(entry,true);
+        copy_text(s_book_title,sizeof(s_book_title),entry->title);
+    } else copy_text(s_book_title,sizeof(s_book_title),"使用说明");
     s_file_size = (uint32_t)st.st_size;
     s_px = app_settings_book_px();
 
@@ -979,12 +1087,38 @@ static app_redraw_t open_book(app_ctx_t* ctx, int index, bool feedback) {
     }
     s_view = VIEW_READING;
     s_menu = false;
+#if !READER_METALIO
+    s_open_hidden=hidden;
+    s_cover_pending=!hidden;
+    app_lock_set_image(NULL);free(s_cover);s_cover=NULL;
+    (void)book_progress_set_last_path(hidden?"":s_path);
+#else
     s_cover_pending = true;
     (void)book_progress_set_last_path(s_path);
+#endif
     save_progress();
-    ESP_LOGI(TAG, "opened %s chapter=%u page=%u px=%d", s_book_title, (unsigned)s_chapter, (unsigned)s_page + 1, s_px);
+    ESP_LOGI(TAG, "opened %s chapter=%u page=%u px=%d",
+#if !READER_METALIO
+        s_open_hidden?"hidden book":
+#endif
+        s_book_title, (unsigned)s_chapter, (unsigned)s_page + 1, s_px);
     return APP_REDRAW_PAGE;
 }
+
+static app_redraw_t open_book(app_ctx_t* ctx,int index,bool feedback) {
+    if(index<0 || index>=s_book_n)return APP_REDRAW_NONE;
+    char path[PATH_BYTES];
+    snprintf(path,sizeof(path),"%s/%s",k_book_dirs[s_books[index].dir],s_books[index].name);
+    return open_book_path(ctx,path,&s_books[index],feedback);
+}
+#if !READER_METALIO
+#define PICO_MANUAL_PATH "/flash/manual/pico-guide.epub"
+static app_redraw_t open_manual(app_ctx_t* ctx,bool feedback) {
+    s_info=false;
+    if(!card_ready() && ttf_font_on_card())(void)ttf_font_open_fallback();
+    return open_book_path(ctx,PICO_MANUAL_PATH,NULL,feedback);
+}
+#endif
 
 // 当前这一章有没有字。只有图片的章节（封面、插图页）在这个只读文字的阅读器里是一张白页。
 // Whether the loaded chapter has any text. A chapter of images only (a cover, a plate) is a blank page in this text-only reader.
@@ -1049,10 +1183,111 @@ static app_redraw_t turn_page(int dir) {
     return APP_REDRAW_PAGE;
 }
 
+/* ---- 目录页 / Contents ---- */
+#define TOC_TOP 172
+#define TOC_ROW_H 104
+#define TOC_ROWS 9
+#define TOC_FOOT_Y 1120
+static void open_toc(void) {
+    if(s_view!=VIEW_READING || !s_text)return;
+    s_menu=false;s_info=false;s_toc=true;s_toc_page=0;s_toc_current=SIZE_MAX;
+    // 页面尾部已出现的小节也算当前阅读范围，避免跳转后又标回上一节。/ Include a section already visible at the page end, so a jump does not highlight the preceding section.
+    size_t end=book_layout_page_start_offset(s_page+1);
+    size_t position=end?end-1:book_layout_page_start_offset(s_page);
+    if(book_toc_current(s_chapter,position,&s_toc_current)==ESP_OK)
+        s_toc_page=s_toc_current/TOC_ROWS;
+}
+static app_redraw_t toc_move(int direction) {
+    size_t pages=(book_toc_count()+TOC_ROWS-1)/TOC_ROWS;
+    if(direction<0 && s_toc_page>0)--s_toc_page;
+    else if(direction>0 && s_toc_page+1<pages)++s_toc_page;
+    else return APP_REDRAW_NONE;
+    return APP_REDRAW_PAGE;
+}
+static void draw_toc(uint8_t* fb) {
+    ui_clear_page(fb);
+    ui_text(fb,UI_MARGIN,36,UI_PX_TITLE,"目录",EPD_DRAW_ALIGN_LEFT,false);
+    char title[NAME_BYTES];copy_text(title,sizeof(title),s_book_title);fit_text(title,28,ui_content_width());
+    ui_text(fb,UI_MARGIN,112,28,title,EPD_DRAW_ALIGN_LEFT,false);
+    ui_hairline(fb,158,UI_MARGIN,ui_content_width(),UI_GRAY_BLACK);
+    size_t total=book_toc_count(),first=s_toc_page*TOC_ROWS;
+    for(size_t row=0;row<TOC_ROWS && first+row<total;row++) {
+        book_toc_entry_t item;if(book_toc_get(first+row,&item)!=ESP_OK)continue;
+        int inset=(item.depth>3?3:item.depth)*22;
+        char lines[LIB_TITLE_LINES][NAME_BYTES]={{0}};
+        int n=wrap_title(item.title,32,ui_content_width()-inset-16,lines);
+        int y=TOC_TOP+(int)row*TOC_ROW_H;
+        if(first+row==s_toc_current) {
+            epd_fill_rect((EpdRect){UI_MARGIN-12,y+4,ui_content_width()+24,TOC_ROW_H-8},0xE0,fb);
+            epd_fill_rect((EpdRect){UI_MARGIN-12,y+TOC_ROW_H/2-16,3,32},0x60,fb);
+        }
+        ui_text_vc(fb,UI_MARGIN+inset,y+(n>1?28:TOC_ROW_H/2),32,lines[0],EPD_DRAW_ALIGN_LEFT,false);
+        if(n>1)ui_text_vc(fb,UI_MARGIN+inset,y+68,32,lines[1],EPD_DRAW_ALIGN_LEFT,false);
+        ui_hairline(fb,y+TOC_ROW_H-1,UI_MARGIN,ui_content_width(),UI_GRAY_LIGHT);
+    }
+    char pages[32];snprintf(pages,sizeof(pages),"%u/%u",(unsigned)s_toc_page+1,(unsigned)((total+TOC_ROWS-1)/TOC_ROWS));
+    ui_text(fb,UI_LOCK_WIDTH/2,68,26,pages,EPD_DRAW_ALIGN_CENTER,false);
+
+    ui_text(fb,UI_LOCK_WIDTH/2,TOC_FOOT_Y+24,28,"返回正文",EPD_DRAW_ALIGN_CENTER,false);
+
+}
+static app_redraw_t toc_jump(app_ctx_t* ctx,size_t index) {
+    size_t chapter=0,offset=0;
+    if(book_toc_resolve(index,&chapter,&offset)!=ESP_OK) {
+        show_toast(ctx,"这一章读不出来");return APP_REDRAW_NONE;
+    }
+    size_t old_offset=book_layout_page_start_offset(s_page);
+    save_progress();
+    // 目录选择精确章节，不自动跳过正文为空的目标。/ TOC selects the exact chapter without skipping empty targets.
+    if(!load_chapter(chapter,offset,false)) {
+        // 排版器可能已被失败目标重置，恢复旧正文后再返回目录。/ Failed layout may reset the paginator; rebuild the old body before returning to TOC.
+        if(!layout_text(s_text,s_text_len,s_blocks,s_block_count,old_offset,false)) {
+            back_to_library("这一章读不出来");return APP_REDRAW_PAGE;
+        }
+        s_page=book_layout_page_for_offset(old_offset);
+        show_toast(ctx,"这一章读不出来");return APP_REDRAW_NONE;
+    }
+    s_info=false;
+    s_toc=false;s_menu=false;save_progress();return APP_REDRAW_PAGE;
+}
+static app_redraw_t toc_gesture(app_ctx_t* ctx,const ui_gesture_event_t* ev) {
+    if(ev->type==UI_GESTURE_SWIPE_L || ev->type==UI_GESTURE_SWIPE_U)return toc_move(1);
+    if(ev->type==UI_GESTURE_SWIPE_R || ev->type==UI_GESTURE_SWIPE_D)return toc_move(-1);
+    if(ev->type!=UI_GESTURE_TAP)return APP_REDRAW_NONE;
+    if(ev->y0>=TOC_FOOT_Y) {
+        if(ev->x0<228 || ev->x0>=456)return APP_REDRAW_NONE;
+        s_info=false;
+    s_toc=false;return APP_REDRAW_PAGE;
+    }
+    if(ev->y0<TOC_TOP || ev->y0>=TOC_TOP+TOC_ROWS*TOC_ROW_H)return APP_REDRAW_NONE;
+    size_t index=s_toc_page*TOC_ROWS+(ev->y0-TOC_TOP)/TOC_ROW_H;
+    return index<book_toc_count()?toc_jump(ctx,index):APP_REDRAW_NONE;
+}
+
+/* ---- 设备信息 / Device information ---- */
+static void draw_device_info(uint8_t* fb) {
+    draw_library(fb);
+#if READER_METALIO
+    ui_device_panel_draw(fb,&s_battery,true,UI_DEVICE_USB_OFF,false);
+#else
+    ui_device_reader_panel_draw(fb,&s_battery,s_clock_date,s_clock_time,clock_feedback(),s_clock_status.active);
+#endif
+}
+static reader_surface_t reader_surface(void) {
+#if !READER_METALIO
+    if(reader_highlight_ui_active() || reader_dict_ui_active())return SURFACE_DICTIONARY;
+    if(reader_vocabulary_ui_active())return SURFACE_VOCABULARY;
+#endif
+    if(s_info)return SURFACE_INFO;
+    if(s_menu)return SURFACE_MENU;
+    if(s_toc)return SURFACE_TOC;
+    return s_view==VIEW_READING?SURFACE_BODY:SURFACE_LIBRARY;
+}
 /* ---- 设置面板 / settings panel ---- */
 
 typedef struct {
     EpdRect panel;
+    int battery_y;
     int size_label_y, font_label_y, refresh_label_y;
 #if READER_METALIO
     int light_label_y, warmth_label_y;
@@ -1098,6 +1333,7 @@ static void menu_geometry(menu_geom_t* g) {
     g->panel = (EpdRect){ 0, UI_LOCK_HEIGHT - height, UI_LOCK_WIDTH, height };
 
     int y = g->panel.y + 28;
+    g->battery_y=y;
     g->size_label_y = y;
     y += LABEL_H;
     for (int i = 0; i < SIZE_N; i++) g->size[i] = ui_grid_rect(i, SIZE_N, 0, y, CHIP_H);
@@ -1138,6 +1374,8 @@ static void draw_menu(uint8_t* fb) {
     menu_geometry(&g);
     ui_clear_rect_fast(fb, g.panel);
     epd_fill_rect((EpdRect){ 0, g.panel.y, UI_LOCK_WIDTH, 3 }, UI_GRAY_BLACK, fb);
+
+    ui_battery_draw(fb,ui_content_right()-UI_BATTERY_WIDTH,g.battery_y,&s_battery);
 
     ui_text(fb, UI_MARGIN, g.size_label_y, UI_PX_CAPTION, "字号", EPD_DRAW_ALIGN_LEFT, false);
     const int px = app_settings_book_px();
@@ -1270,13 +1508,49 @@ static void take_screenshot(app_ctx_t* ctx) {
 
 #endif  // READER_SCREENSHOT
 
+#if !READER_METALIO
+static EpdRect library_action_rect(void){return (EpdRect){64,430,UI_LOCK_WIDTH-128,230};}
+static void draw_library_action(uint8_t *fb) {
+ EpdRect r=library_action_rect();ui_clear_rect_fast(fb,r);epd_draw_rect(r,UI_GRAY_BLACK,fb);
+ char title[NAME_BYTES];copy_text(title,sizeof(title),s_library_action_title);fit_text(title,30,r.width-40);
+ ui_text_vc(fb,UI_LOCK_WIDTH/2,r.y+60,30,title,EPD_DRAW_ALIGN_CENTER,false);
+ ui_text_vc(fb,UI_LOCK_WIDTH/3,r.y+166,30,"取消",EPD_DRAW_ALIGN_CENTER,false);
+ ui_text_vc(fb,UI_LOCK_WIDTH*2/3,r.y+166,30,s_hidden_library?"取消隐藏":"隐藏",EPD_DRAW_ALIGN_CENTER,false);
+}
+static app_redraw_t library_action_gesture(app_ctx_t *ctx,const ui_gesture_event_t *ev) {
+ (void)ctx;if(ev->type!=UI_GESTURE_TAP)return APP_REDRAW_NONE;
+ EpdRect r=library_action_rect();
+ if(ui_rect_hit(r,ev->x0,ev->y0) && ev->y0>=r.y+120 && ev->x0>=UI_LOCK_WIDTH/2) {
+  esp_err_t error=book_visibility_set(s_library_action_path,!s_hidden_library);
+  s_library_action=false;s_lib_page=0;library_scan();
+  if(error!=ESP_OK)copy_text(s_notice,sizeof(s_notice),"隐藏设置保存未确认");
+  return APP_REDRAW_PAGE;
+ }
+ if(!ui_rect_hit(r,ev->x0,ev->y0) || ev->y0>=r.y+120){s_library_action=false;return APP_REDRAW_PAGE;}
+ return APP_REDRAW_NONE;
+}
+#endif
+
 /* ---- 页面回调 / page callbacks ---- */
 
 static void render(app_ctx_t* ctx, uint8_t* fb) {
     (void)ctx;
-    if (s_view == VIEW_READING && s_text != NULL) draw_reading(fb);
+#if !READER_METALIO
+    if(reader_highlight_ui_active()) { reader_highlight_ui_draw(fb);return; }
+    if(reader_dict_ui_active()) { reader_dict_ui_draw(fb);return; }
+    if(s_dict_restored) { s_dict_restored=false;if(fb!=ctx->fb)memcpy(fb,ctx->fb,(size_t)epd_width()*epd_height()/2);return; }
+#endif
+    #if !READER_METALIO
+    if(reader_vocabulary_ui_active()) { reader_vocabulary_ui_draw(fb);return; }
+    #endif
+    if(s_info)draw_device_info(fb);
+    else if(s_toc && s_view==VIEW_READING)draw_toc(fb);
+    else if (s_view == VIEW_READING && s_text != NULL) draw_reading(fb);
     else draw_library(fb);
     if (s_menu) draw_menu(fb);
+#if !READER_METALIO
+    if(s_library_action)draw_library_action(fb);
+#endif
 }
 
 // 自己决定用哪种刷新：面板操作用快刷求跟手；翻页按用户选的档；"清除残影"和进页用全刷。
@@ -1287,6 +1561,9 @@ static bool present(app_ctx_t* ctx, app_redraw_t redraw) {
         s_force_full = true;
         return true;
     }
+#if !READER_METALIO
+    const bool dict_selecting = reader_dict_ui_selecting();
+#endif
     const int64_t draw_start = esp_timer_get_time();
     ttf_bench_begin();
     render(ctx, ctx->fb);
@@ -1298,15 +1575,29 @@ static bool present(app_ctx_t* ctx, app_redraw_t redraw) {
     enum EpdDrawError result;
     if (redraw == APP_REDRAW_FULL || s_force_full) {
         result = update_display_full(ctx->hl);
-    } else if (s_menu) {
+#if !READER_METALIO
+    } else if (dict_selecting && (s_presented_surface == SURFACE_BODY || s_dict_was_selecting)) {
+        // 原页像素不变，仅快刷选框；词卡返回需灰阶恢复。/ Update boxes with DU; restore grayscale when leaving a card.
+        result = update_display_area_with(ctx->hl, &READER_WAVEFORM, MODE_DU,
+            (EpdRect){0, 0, UI_LOCK_WIDTH, UI_LOCK_HEIGHT});
+#endif
+    } else if (reader_surface()!=SURFACE_BODY || s_presented_surface!=SURFACE_BODY) {
+        result = update_display_mode(ctx->hl, MODE_GL16);
+    } else if (s_view == VIEW_READING && profile == APP_READER_REFRESH_FAST && !ui_battery_low(&s_battery)) {
+#if READER_METALIO
         result = update_display_mode(ctx->hl, MODE_DU);
-    } else if (s_view == VIEW_READING && profile == APP_READER_REFRESH_FAST) {
+#else
         result = update_display_mode(ctx->hl, MODE_DU);
+#endif
     } else if (s_view == VIEW_READING && profile == APP_READER_REFRESH_CLEAR) {
         result = update_display_full(ctx->hl);
     } else {
         result = update_display_mode(ctx->hl, MODE_GL16);
     }
+    s_presented_surface=reader_surface();
+#if !READER_METALIO
+    s_dict_was_selecting = dict_selecting;
+#endif
     s_force_full = false;
     guard_draw_result(ctx->hl, result);
     const int64_t done = esp_timer_get_time();
@@ -1327,6 +1618,15 @@ static app_redraw_t resume_book(app_ctx_t* ctx) {
         if (s_card_missing && card_ready()) library_scan();
         char last[PATH_BYTES], path[PATH_BYTES];
         const bool have_last = book_progress_last_path(last, sizeof(last)) && last[0] != 0;
+#if !READER_METALIO
+        if(have_last && strcmp(last,PICO_MANUAL_PATH)) {
+            bool hidden=true;
+            if(book_visibility_get(last,&hidden)!=ESP_OK || hidden) {
+                (void)book_progress_set_last_path("");s_resume_pending=false;return APP_REDRAW_PAGE;
+            }
+        }
+        if(have_last && !strcmp(last,PICO_MANUAL_PATH))return open_manual(ctx,false);
+#endif
         for (int i = 0; have_last && i < s_book_n; i++) {
             snprintf(path, sizeof(path), "%s/%s", k_book_dirs[s_books[i].dir], s_books[i].name);
             if (strcmp(path, last) != 0) continue;
@@ -1345,7 +1645,12 @@ static app_redraw_t resume_book(app_ctx_t* ctx) {
 }
 
 static void on_enter(app_ctx_t* ctx) {
+#if !READER_METALIO
+    reader_clock_init();reader_clock_tick();clock_snapshot();s_clock_next_app=NULL;
+    s_hidden_library=false;s_library_action=false;s_header_taps=0;
+#endif
     (void)ctx;
+    reader_battery_sample(&s_battery);
     // 这一版不显示书里的图片，占位框也不留。/ This version shows no book images and leaves no placeholder.
     book_layout_set_image_placeholders(false);
     // 从锁屏回来时书还开着，就接着读。/ Returning from the lock screen with a book still open: keep reading.
@@ -1363,16 +1668,43 @@ static void on_enter(app_ctx_t* ctx) {
     (void)resume_book(ctx);
 }
 
+#if !READER_METALIO
+static void reader_on_lock(app_ctx_t *ctx) {
+ (void)ctx;s_lookup_mode=false;s_header_taps=0;s_library_action=false;
+ reader_highlight_ui_close();reader_dict_ui_close();reader_vocabulary_ui_close();s_dict_restored=false;
+ if(s_hidden_library || s_open_hidden) {
+  save_progress();s_hidden_library=false;s_resume_pending=false;
+  (void)book_progress_set_last_path("");
+  free_book();s_view=VIEW_LIBRARY;s_menu=false;s_lib_page=0;library_scan();
+ }
+}
+#endif
+
 // 不能叫 on_exit：标准库 stdlib.h 里已经有一个同名函数。
 // Not named on_exit: stdlib.h already declares a function by that name.
 static void reader_on_exit(app_ctx_t* ctx) {
+#if !READER_METALIO
+    (void)reader_clock_cancel();s_clock_next_app=NULL;
+    reader_on_lock(ctx);
+#endif
+#if !READER_METALIO
+    reader_highlight_ui_close();reader_dict_ui_close();reader_vocabulary_ui_close();s_dict_restored=false;
+#endif
     (void)ctx;
+    s_info=false;
+    s_toc=false;
     book_layout_set_image_placeholders(true);  // 还给官方的图书演示页 / hand back to the vendor book demo page
     save_progress();
 }
 
 static void on_media_lost(app_ctx_t* ctx) {
+#if !READER_METALIO
+    s_library_action=false;s_header_taps=0;
+    reader_highlight_ui_close();reader_dict_ui_close();reader_vocabulary_ui_close();s_dict_restored=false;
+#endif
     (void)ctx;
+    s_info=false;
+    s_toc=false;
     s_menu = false;
     s_font_checked = false;  // 卡变了，下次重新找可用字体 / the card changed; search for a usable font again next time
     if (s_view == VIEW_READING && s_text != NULL && on_flash(s_path)) {
@@ -1392,17 +1724,136 @@ static void on_media_lost(app_ctx_t* ctx) {
     library_scan();
 }
 
+#if !READER_METALIO
+static EpdRect s_dict_hold_area;
+static EpdRect dictionary_area_hint(app_ctx_t *ctx) { (void)ctx;return s_dict_hold_area; }
+static app_redraw_t dictionary_hold_redraw(app_ctx_t *ctx,bool cancel) {
+    // 先保存脏区；取消新覆盖层会释放并清空词典状态。/ Retain the dirty area first: cancelling a new overlay frees and clears dictionary state.
+    s_dict_hold_area=cancel?reader_dict_ui_hold_restore_area():reader_dict_ui_hold_area();
+    if(cancel)(void)reader_dict_ui_hold_cancel();
+    if(reader_dict_ui_active())reader_dict_ui_draw(ctx->fb);
+    s_dict_restored=false;
+    if(s_dict_hold_area.width<=0 || s_dict_hold_area.height<=0)return APP_REDRAW_NONE;
+    if(cancel) {
+        // Restore antialiased text with the vendor grayscale path, not threshold DU.
+        guard_draw_result(ctx->hl,update_display_area_with(ctx->hl,&READER_WAVEFORM,MODE_GL16,s_dict_hold_area));
+        return APP_REDRAW_DONE;
+    }
+    return APP_REDRAW_AREA;
+}
+#endif
+
 static app_redraw_t on_gesture(app_ctx_t* ctx, const ui_gesture_event_t* ev) {
     // 等卡时书库还未显示，不能命中它的隐藏行。/ While waiting for the card, never hit-test hidden library rows.
     if (s_resume_pending) return APP_REDRAW_NONE;
+#if !READER_METALIO
+    if(s_library_action)return library_action_gesture(ctx,ev);
+    const bool header_tap=reader_surface()==SURFACE_LIBRARY && ev->type==UI_GESTURE_TAP && ev->x0>=UI_MARGIN && ev->x0<310 && ev->y0>=40 && ev->y0<=112;
+    if(header_tap) {
+        if(ctx->now_ms<s_header_tap_ms || ctx->now_ms-s_header_tap_ms>550)s_header_taps=0;
+        s_header_tap_ms=ctx->now_ms;
+        if(++s_header_taps==3){s_header_taps=0;s_hidden_library=!s_hidden_library;s_lib_page=0;library_scan();return APP_REDRAW_PAGE;}
+        return APP_REDRAW_NONE;
+    }
+    if(ev->type!=UI_GESTURE_PRESS)s_header_taps=0;
+#endif
+    if(s_info) {
+        if(ev->type==UI_GESTURE_SWIPE_U || (ev->type==UI_GESTURE_TAP && ev->y0>=(READER_METALIO?UI_DEVICE_PANEL_HEIGHT:UI_DEVICE_READER_PANEL_HEIGHT))) {
+#if !READER_METALIO
+            s_clock_next_app=NULL;
+#endif
+            s_info=false;return APP_REDRAW_PAGE;
+        }
+        #if !READER_METALIO
+        if(s_clock_next_app)return APP_REDRAW_NONE;
+        if(ev->type==UI_GESTURE_TAP && ui_device_wifi_hit(ev->x0,ev->y0)) {
+            s_clock_next_app=&app_wifi_transfer;
+            if(reader_clock_cancel()){ctx->request_app=s_clock_next_app;s_clock_next_app=NULL;return APP_REDRAW_NONE;}
+            return APP_REDRAW_PAGE;
+        }
+        if(ev->type==UI_GESTURE_TAP && ui_device_clock_hit(ev->x0,ev->y0)) {
+            (void)reader_clock_request();clock_snapshot();return APP_REDRAW_PAGE;
+        }
+        if(ev->type==UI_GESTURE_TAP && ui_device_manual_hit(ev->x0,ev->y0))return open_manual(ctx,true);
+        if(ev->type==UI_GESTURE_TAP && ui_device_usb_hit(ev->x0,ev->y0,true)) {
+            s_clock_next_app=&app_usb_transfer;
+            if(reader_clock_cancel()){ctx->request_app=s_clock_next_app;s_clock_next_app=NULL;return APP_REDRAW_NONE;}
+            return APP_REDRAW_PAGE;
+        }
+#endif
+        return APP_REDRAW_NONE;
+    }
+#if !READER_METALIO
+    if(reader_highlight_ui_active()) {
+        if(ev->type==UI_GESTURE_TAP && reader_highlight_ui_tap(ev->x0,ev->y0))return APP_REDRAW_PAGE;
+        return APP_REDRAW_NONE;
+    }
+    if(reader_dict_ui_active()) {
+        if(ev->type==UI_GESTURE_LONG_DRAG)
+            return reader_dict_ui_hold_move(ev->x,ev->y)?dictionary_hold_redraw(ctx,false):APP_REDRAW_NONE;
+        if(ev->type==UI_GESTURE_LONG_PRESS)
+            return reader_dict_ui_hold_existing(ev->x0,ev->y0)?dictionary_hold_redraw(ctx,false):APP_REDRAW_NONE;
+        if(ev->type==UI_GESTURE_CANCEL && reader_dict_ui_holding())return dictionary_hold_redraw(ctx,true);
+        if(ev->type==UI_GESTURE_LONG_RELEASE) {
+            if(reader_dict_ui_holding())return reader_dict_ui_hold_finish()?APP_REDRAW_PAGE:APP_REDRAW_NONE;
+            return reader_dict_ui_query_at(ev->x0,ev->y0)?APP_REDRAW_PAGE:APP_REDRAW_NONE;
+        }
+        if(ev->type!=UI_GESTURE_TAP || !reader_dict_ui_tap(ev->x0,ev->y0))return APP_REDRAW_NONE;
+        s_dict_restored=!reader_dict_ui_active();return APP_REDRAW_PAGE;
+    }
+#endif
+    #if !READER_METALIO
+    if(reader_vocabulary_ui_active()) {
+        if(ev->type==UI_GESTURE_TAP)return reader_vocabulary_ui_tap(ev->x0,ev->y0,ctx->fb)?APP_REDRAW_PAGE:APP_REDRAW_NONE;
+        if(ev->type==UI_GESTURE_SWIPE_L || ev->type==UI_GESTURE_SWIPE_U)return reader_vocabulary_ui_move(1)?APP_REDRAW_PAGE:APP_REDRAW_NONE;
+        if(ev->type==UI_GESTURE_SWIPE_R || ev->type==UI_GESTURE_SWIPE_D)return reader_vocabulary_ui_move(-1)?APP_REDRAW_PAGE:APP_REDRAW_NONE;
+        return APP_REDRAW_NONE;
+    }
+    #endif
+    if(s_toc)return toc_gesture(ctx,ev);
     if (s_menu) return ev->type == UI_GESTURE_TAP ? menu_tap(ev->x0, ev->y0) : APP_REDRAW_NONE;
     if (s_view == VIEW_READING) {
         switch (ev->type) {
+#if !READER_METALIO
+            case UI_GESTURE_LONG_PRESS:
+                if(!s_lookup_mode) {
+                    if(!ui_rect_hit(body_rect(),ev->x0,ev->y0))return APP_REDRAW_NONE;
+                    if(!reader_highlight_ui_open(s_page,body_rect(),s_px,ctx->fb,UI_LOCK_HEIGHT-READ_FOOTER_H))return APP_REDRAW_NONE;
+                    (void)reader_highlight_ui_tap(ev->x0,ev->y0);return APP_REDRAW_PAGE;
+                }
+                reader_dict_ui_set_book(s_book_title);
+                return reader_dict_ui_hold_at(s_text,s_text_len,s_page,body_rect(),s_px,ctx->fb,
+                    UI_LOCK_HEIGHT-READ_FOOTER_H,ev->x0,ev->y0)?dictionary_hold_redraw(ctx,false):APP_REDRAW_NONE;
+            case UI_GESTURE_LONG_RELEASE:
+                if(!s_lookup_mode)return APP_REDRAW_NONE;
+                reader_dict_ui_set_book(s_book_title);
+                return reader_dict_ui_open_at(s_text,s_text_len,s_page,body_rect(),s_px,ctx->fb,
+                    UI_LOCK_HEIGHT-READ_FOOTER_H,ev->x0,ev->y0)?APP_REDRAW_PAGE:APP_REDRAW_NONE;
+#endif
             case UI_GESTURE_TAP: return turn_page(ev->x0 < READ_PREV_W ? -1 : 1);
             case UI_GESTURE_SWIPE_L: return turn_page(1);
             case UI_GESTURE_SWIPE_R: return turn_page(-1);
+            case UI_GESTURE_SWIPE_D:
+                // 只有正文顶部发起的下滑打开目录，普通垂直移动不翻页。/ Only a top-edge downward swipe opens TOC; other vertical motion does not turn pages.
+                if(ev->y0<=96){open_toc();return s_toc?APP_REDRAW_PAGE:APP_REDRAW_NONE;}
+                return APP_REDRAW_NONE;
             default: return APP_REDRAW_NONE;
         }
+    }
+#if !READER_METALIO
+    if(ev->type==UI_GESTURE_LONG_PRESS && s_view==VIEW_LIBRARY) {
+        lib_row_t rows[LIB_ROWS];int count=page_rows(rows);
+        for(int i=0;i<count;i++)if(ev->y0>=rows[i].y && ev->y0<rows[i].y+rows[i].h) {
+            lib_entry_t *entry=&s_books[rows[i].index];
+            snprintf(s_library_action_path,sizeof(s_library_action_path),"%s/%s",k_book_dirs[entry->dir],entry->name);
+            copy_text(s_library_action_title,sizeof(s_library_action_title),entry->title);
+            s_library_action=true;return APP_REDRAW_PAGE;
+        }
+        return APP_REDRAW_NONE;
+    }
+#endif
+    if(ev->type==UI_GESTURE_SWIPE_D && ev->y0<=96) {
+        s_info=true;s_menu=false;return APP_REDRAW_PAGE;
     }
     switch (ev->type) {
         case UI_GESTURE_TAP: {
@@ -1445,7 +1896,36 @@ static app_redraw_t on_gesture(app_ctx_t* ctx, const ui_gesture_event_t* ev) {
 }
 
 static app_redraw_t on_key(app_ctx_t* ctx, int key) {
+    reader_battery_sample(&s_battery);
     s_mid_long_armed = false;
+#if !READER_METALIO
+    s_header_taps=0;
+    if(s_library_action) {if(key==UI_KEY_2 || key==UI_KEY_1){s_library_action=false;return APP_REDRAW_PAGE;}return key==UI_KEY_3?APP_REDRAW_FULL:APP_REDRAW_NONE;}
+    if(reader_highlight_ui_active()) {
+        if(key==UI_KEY_2){reader_highlight_ui_close();return APP_REDRAW_PAGE;}
+        if(key==UI_KEY_3){s_force_full=true;return APP_REDRAW_FULL;}
+        return APP_REDRAW_NONE;
+    }
+    if(reader_dict_ui_active()) {
+        if(key==UI_KEY_2) { reader_dict_ui_close();s_dict_restored=true;return APP_REDRAW_PAGE; }
+        return key==UI_KEY_3?APP_REDRAW_FULL:APP_REDRAW_NONE;
+    }
+#endif
+    #if !READER_METALIO
+    if(reader_vocabulary_ui_active()) {
+        if(key==UI_KEY_2) {
+            if(!reader_vocabulary_ui_back())reader_vocabulary_ui_close();
+            s_dict_restored=false;return APP_REDRAW_PAGE;
+        }
+        return key==UI_KEY_3?APP_REDRAW_FULL:APP_REDRAW_NONE;
+    }
+    #endif
+    if(s_info && (key==UI_KEY_1 || key==UI_KEY_2)) {
+#if !READER_METALIO
+        s_clock_next_app=NULL;
+#endif
+        s_info=false;return APP_REDRAW_PAGE;
+    }
 #if READER_METALIO
     // Metalio 左键无条件回书库，中键开关设置。/ Metalio left always returns home; middle toggles settings.
     if (key == UI_KEY_1) {
@@ -1466,6 +1946,7 @@ static app_redraw_t on_key(app_ctx_t* ctx, int key) {
         return APP_REDRAW_NONE;
     }
     if (key == READER_INPUT_PREVIOUS || key == READER_INPUT_NEXT) {
+        if(s_toc)return toc_move(key==READER_INPUT_PREVIOUS?-1:1);
         if (s_resume_pending || s_menu || s_view != VIEW_READING) return APP_REDRAW_NONE;
         return turn_page(key == READER_INPUT_PREVIOUS ? -1 : 1);
     }
@@ -1480,10 +1961,12 @@ static app_redraw_t on_key(app_ctx_t* ctx, int key) {
     }
     switch (key) {
         case UI_KEY_1:  // 左：开关设置面板 / left: toggle the settings panel
+            if(s_toc){s_toc=false;return APP_REDRAW_PAGE;}
             s_menu = !s_menu;
             if (s_menu) (void)ttf_font_scan();
             return APP_REDRAW_PAGE;
         case UI_KEY_2:  // 中：返回上一级 / middle: back one level
+            if(s_toc){s_toc=false;return APP_REDRAW_PAGE;}
             if (s_menu) {
                 s_menu = false;
                 return APP_REDRAW_PAGE;
@@ -1493,7 +1976,7 @@ static app_redraw_t on_key(app_ctx_t* ctx, int key) {
                 back_to_library(NULL);
                 return APP_REDRAW_PAGE;
             }
-            s_mid_long_armed = true;
+            s_mid_long_armed = false;
             return APP_REDRAW_NONE;
         case UI_KEY_3:  // 右：全刷一次，清掉残影 / right: one full refresh to clear ghosting
             s_force_full = true;
@@ -1503,14 +1986,17 @@ static app_redraw_t on_key(app_ctx_t* ctx, int key) {
     }
 }
 
-// 书库页长按中键进硬件演示菜单，给开发和排查用。只认"这次按下时就在书库"，
-// 免得从书里返回时按久了一点就误入。
-// Long-press the middle key in the library for the hardware demo menu, for development and
-// diagnostics. Only a press that began in the library counts, so a slightly long "back" out of
-// a book does not trip it.
+// 正文右键长按切换划线/查词；书库保持单词本入口。/ Reading right holds toggle highlight/dictionary modes; library retains vocabulary.
 static app_redraw_t on_key_long(app_ctx_t* ctx, int key) {
 #if !READER_METALIO
-    if (key == UI_KEY_2 && s_mid_long_armed && s_view == VIEW_LIBRARY && !s_menu) ctx->request_menu = true;
+    if(s_library_action)return APP_REDRAW_NONE;
+    if(key==UI_KEY_3 && s_view==VIEW_READING && !s_info && !s_menu && !s_toc && !s_resume_pending) {
+        reader_highlight_ui_close();reader_dict_ui_close();s_dict_restored=false;
+        s_lookup_mode=!s_lookup_mode;s_mid_long_armed=false;return APP_REDRAW_PAGE;
+    }
+    if(key==UI_KEY_3 && reader_surface()==SURFACE_LIBRARY && !s_resume_pending) {
+        s_mid_long_armed=false;s_dict_restored=false;reader_vocabulary_ui_open();return APP_REDRAW_PAGE;
+    }
 #endif
     s_mid_long_armed = false;
     return APP_REDRAW_NONE;
@@ -1519,7 +2005,7 @@ static app_redraw_t on_key_long(app_ctx_t* ctx, int key) {
 // 只在书库空闲时恢复卡，先关闭全部消费者；失败最多重试三次，避免反复卸载。
 // Recover only in an idle library after closing consumers; cap failures at three attempts.
 static app_redraw_t recover_library_card(app_ctx_t* ctx) {
-    if (s_view != VIEW_LIBRARY || s_menu || ctx->pressed ||
+    if (s_view != VIEW_LIBRARY || s_menu || s_info || ctx->pressed ||
         (ctx->touch != NULL && ctx->touch->touched) || !s_card_missing ||
         ctx->now_ms - s_card_poll_ms < 1000) return APP_REDRAW_NONE;
     s_card_poll_ms = ctx->now_ms;
@@ -1543,6 +2029,9 @@ static app_redraw_t recover_library_card(app_ctx_t* ctx) {
             return APP_REDRAW_NONE;
         }
         s_font_checked = false;
+#if !READER_METALIO
+        reader_wallpaper_invalidate();
+#endif
         const esp_err_t err = reader_media_remount();
         ESP_LOGI(TAG, "SD recovery attempt=%u previous=%s result=%s", s_card_retry_count,
                  esp_err_to_name(status == ESP_OK ? sd.error : status), esp_err_to_name(err));
@@ -1557,6 +2046,18 @@ static app_redraw_t recover_library_card(app_ctx_t* ctx) {
 }
 
 static app_redraw_t on_tick(app_ctx_t* ctx) {
+#if !READER_METALIO
+    reader_clock_tick();clock_snapshot();
+    if(reader_dict_ui_holding())reader_dict_ui_hold_tick(ctx->now_ms);
+    if(s_clock_next_app && reader_clock_cancel()) {
+        ctx->request_app=s_clock_next_app;s_clock_next_app=NULL;return APP_REDRAW_NONE;
+    }
+    if(s_info && s_clock_redraw && !ctx->pressed){s_clock_redraw=false;return APP_REDRAW_PAGE;}
+#endif
+#if !READER_METALIO
+    if(s_library_action || reader_highlight_ui_active() || reader_dict_ui_active() || reader_vocabulary_ui_active())return APP_REDRAW_NONE;
+#endif
+    reader_battery_sample(&s_battery);
     // 提示条到点后把底下的画面还原，只推那一条，用 GL16 保住文字的灰阶。
     // When the notice expires restore what was under it, pushing only that strip in GL16 to keep text grays.
     if (s_toast_until_ms != 0 && ctx->now_ms >= s_toast_until_ms) {
@@ -1579,14 +2080,14 @@ static app_redraw_t on_tick(app_ctx_t* ctx) {
     }
     // 书库空闲时接着读后面的书目信息；总页数一算出来就把页脚那一条重画一下（只推这一条，用 GL16 保住文字的灰阶）。
     // While the library idles keep reading later metadata; once the total is known repaint just the footer strip (GL16 to keep text grays).
-    if (s_view == VIEW_LIBRARY && !s_menu && !s_resume_pending && !ctx->pressed && ctx->now_ms >= s_idle_after_ms && s_toast_until_ms == 0 && library_idle_step()) {
+    if (s_view == VIEW_LIBRARY && !s_menu && !s_info && !s_resume_pending && !ctx->pressed && ctx->now_ms >= s_idle_after_ms && s_toast_until_ms == 0 && library_idle_step()) {
         render(ctx, ctx->fb);
         guard_draw_result(ctx->hl, update_display_area_with(ctx->hl, &READER_WAVEFORM, MODE_GL16, library_footer_rect()));
         return APP_REDRAW_DONE;
     }
     // 书打开后空闲时把封面图读进来（整理过的书里才有），锁屏时显示它。放在空闲时读，不拖慢开书。
     // Once a book is open, read its cover while idle (only prepared books carry one) for the lock screen. Reading it while idle keeps opening fast.
-    if (s_view == VIEW_READING && s_cover_pending && !s_menu && !ctx->pressed && ctx->now_ms >= s_idle_after_ms) {
+    if (s_view == VIEW_READING && s_cover_pending && !s_toc && !s_menu && !ctx->pressed && ctx->now_ms >= s_idle_after_ms) {
         s_cover_pending = false;
         if (book_read_file(BOOK_EPUB_COVER_PATH, BOOK_EPUB_COVER_BYTES, &s_cover) == ESP_OK) {
             app_lock_set_image(s_cover);
@@ -1596,7 +2097,7 @@ static app_redraw_t on_tick(app_ctx_t* ctx) {
     }
     // 空闲时接着把本章剩下的页排完，页脚的总页数才出得来。
     // While idle keep paginating the rest of the chapter so the footer can show its page total.
-    if (s_view == VIEW_READING && s_text != NULL && !s_menu && !ctx->pressed && ctx->now_ms >= s_idle_after_ms && !book_layout_complete()) {
+    if (s_view == VIEW_READING && s_text != NULL && !s_toc && !s_menu && !ctx->pressed && ctx->now_ms >= s_idle_after_ms && !book_layout_complete()) {
         if (!book_layout_extend(1)) {
             back_to_library("排版失败：内存不足或章节过长");
             return APP_REDRAW_PAGE;
@@ -1604,6 +2105,17 @@ static app_redraw_t on_tick(app_ctx_t* ctx) {
     }
     return APP_REDRAW_NONE;
 }
+
+#if !READER_METALIO
+static bool allow_long_drag(app_ctx_t *ctx) {
+    (void)ctx;return reader_dict_ui_holding();
+}
+static bool defer_key(app_ctx_t *ctx, int key) {
+    (void)ctx;
+    return key == UI_KEY_3 && !s_resume_pending && !s_library_action &&
+        ((s_view==VIEW_READING && !s_info && !s_menu && !s_toc) || reader_surface()==SURFACE_LIBRARY);
+}
+#endif
 
 const app_desc_t app_reader = {
     .title = "阅读器 Reader",
@@ -1619,5 +2131,12 @@ const app_desc_t app_reader = {
     .on_gesture = on_gesture,
     .on_key = on_key,
     .on_key_long = on_key_long,
+#if !READER_METALIO
+    .preloads_wallpaper = true,
+    .on_lock = reader_on_lock,
+    .defer_key = defer_key,
+    .allow_long_drag = allow_long_drag,
+    .area_hint = dictionary_area_hint,
+#endif
     .on_tick = on_tick,
 };

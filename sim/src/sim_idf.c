@@ -186,7 +186,7 @@ esp_err_t esp_efuse_mac_get_default(uint8_t* mac) { return esp_read_mac(mac, ESP
 
 const esp_app_desc_t* esp_app_get_description(void) {
     static esp_app_desc_t desc = {
-        .version = "simulator",
+        .version = READER_SIM_VERSION,
         .project_name = "read_pico",
         .time = __TIME__,
         .date = __DATE__,

@@ -1,12 +1,14 @@
 # 构建与验证
 
+本次更新小纸 **2026.11.21-preview.20**，编译和电脑回归已通过，已烧录、完整读回校验并正常启动，用户确认划线／查词切换、跨行选字、隐藏书库、锁屏唤醒及新版说明书正常；Wi-Fi传书本版尚未测试。无名继续发布 **2026.11.18-preview** 原 BIN 和原源码归档；下面的最新源码无名构建只用于兼容检查，不能作为旧 BIN 的同版本复现说明。
+
 ## 环境
 
-使用 [ESP-IDF v6.1](https://github.com/espressif/esp-idf/tree/v6.1)。此分享包构建环境的 IDF 提交为 `fff9895c82d744c7237be8847347bdd1b07c6643`，SDK 工作区无本地修改；ESP32-S31 需要预览目标支持。发布时使用 esptool 5.6.0。
+使用 [ESP-IDF v6.1](https://github.com/espressif/esp-idf/tree/v6.1)。记录的构建环境 IDF 提交为 `fff9895c82d744c7237be8847347bdd1b07c6643`，SDK 工作区无本地修改；ESP32-S31 需要预览目标支持。打包环境使用 esptool 5.6.0。
 
-按 ESP-IDF 官方安装流程准备目标工具链，激活 `export.sh` 或对应 Windows 环境。首次配置时组件管理器按 `dependencies.lock` 下载依赖，需要联网；固件日常阅读不需要联网。
+按 ESP-IDF 官方安装流程准备目标工具链，激活 `export.sh` 或对应 Windows 环境。首次配置时组件管理器按 `dependencies.lock` 下载依赖，需要联网；日常阅读和查词不需要联网。小纸主动 Wi-Fi 传书，以及已配网后的每日首次开机／手动校时，会短时联网。
 
-源码包已包含字体、波形和内置书籍，不必先重新生成资源。`configs/` 保存本次构建的完整配置，`sdkconfig*.defaults` 是用于新构建的默认配置。不要混用两机缓存，也不要把 CI 用的配置当作产品配置。
+源码包包含字体、波形和内置书籍资源。小纸新版机内书籍为《梦溪笔谈》和 The Time Machine，并有独立使用说明；无名旧源码保留原内置书。修改说明书原稿后须用 `tools/build_pico_guide.py` 更新机内说明书，再构建 storage。离线词库是独立 Release ZIP，不纳入 Git 源码或固件的机内存储；解压后放到 SD 卡根目录。`configs/` 保存本次构建的完整配置，`sdkconfig*.defaults` 是用于新构建的默认配置。不要混用两机缓存，也不要把 CI 用的配置当作产品配置。
 
 ## 小纸 Pico
 
@@ -21,7 +23,7 @@ idf.py -B build -DREADER_BOARD=pico build
 
 ## Metalio E-Ink 4 Plus
 
-仅在确认与本包相同接线和屏幕参数时使用下列命令。`1200` 是本包所针对的 VCOM 参数，不是所有面板的通用值。
+最新源码此目标仅做兼容检查，不发布新的无名固件。需要维护已发布旧版，请先切换到 `simple-offline-reading-source-2026.11.18-preview.zip` 原归档。仅在确认与本包相同接线和屏幕参数时使用下列命令。`1200` 是本包所针对的 VCOM 参数，不是所有面板的通用值。
 
 ```bash
 mkdir -p build-metalio
@@ -36,7 +38,7 @@ idf.py --preview -B build-metalio \
 
 ## 合并完整镜像
 
-使用构建生成的 `flasher_args.json`，其中记录实际偏移。下面示例与本次发布布局一致，均输出从 `0x0` 开始的 16 MB 完整镜像：
+使用构建生成的 `flasher_args.json`，其中记录实际偏移。下面是现有布局示例；必须先核对对应版本分区表和构建结果。均输出从 `0x0` 开始的 16 MB 完整镜像：
 
 ```bash
 python -m esptool --chip esp32s3 merge-bin \
@@ -56,17 +58,26 @@ python -m esptool --chip esp32s31 merge-bin \
 
 使用 `python` 或当前 ESP-IDF 环境中的 Python。不得把设备读取的完整 Flash dump 当成分享镜像，它可能包含用户设置和内容。合并镜像使用干净构建产物，间隙用 `0xFF` 填充。
 
-镜像组成：NVS 从 `0x9000` 开始，完整镜像在该处为空白；程序从 `0x10000` 开始、容量 4 MB；机内存储从 `0x410000` 开始、容量 11 MB。具体以分区表 CSV 和 `manifest.json` 为准。全量刷写会重置机内数据；仅同布局更新才使用 app-only。
+镜像组成：NVS 从 `0x9000` 开始，完整镜像在该处为空白；程序从 `0x10000` 开始、容量 4 MB；机内存储从 `0x410000` 开始、容量 11 MB。具体以分区表 CSV 和 `manifest.json` 为准。全量刷写会重置机内数据；仅同布局更新才使用 app-only。只刷 app 不会更新 storage 中的内置书和说明书；需要同步资源时，按该固件包指南选择明确包含资源的更新方式。不能用旧 storage 搭配新版本说明后声称完整更新。
 
 发布版不承诺逐字节可重复构建：ESP-IDF 会把编译时间、项目版本和 ELF 校验信息写入程序。源码文件清单、配置、SDK 提交和镜像 SHA-256 用于追踪版本，不把重新编译后哈希不同误判为源码不同。
 
 ## 回归验证入口
 
-下面是现有测试，不要求设备连接：
+下面是现有测试，不要求设备连接，但新下载源码不保证能直接启动模拟器：`sim/Makefile` 和部分主机测试依赖 `managed_components/espressif__cjson/cJSON`。先激活 ESP-IDF，按上方小纸配置准备 `sdkconfig`，运行 `idf.py -B build -DREADER_BOARD=pico reconfigure`，让组件管理器取得锁定依赖；或按 Makefile 明确配置依赖路径，再运行对应测试。此准备可能需要联网。
 
 ```bash
 bash tools/run_book_host_tests.sh
 bash tools/run_epub_host_tests.sh
+bash tools/run_reader_dictionary_rows_tests.sh
+bash tools/run_reader_sentence_tests.sh
+bash tools/run_reader_clock_tests.sh
+bash tools/run_app_loop_host_tests.sh
+bash tools/run_reader_wallpaper_tests.sh
+python3 tools/run_reader_dictionary_tests.py
+python3 tools/run_reader_highlight_tests.py
+python3 tools/run_reader_highlight_ui_tests.py
+python3 tools/run_book_visibility_tests.py
 python3 tools/run_reader_perf_tests.py
 python3 tools/run_reader_metalio_tests.py
 python3 tools/run_metalio_display_tests.py
@@ -86,9 +97,9 @@ python3 tools/run_fatfs_filename_tests.py \
 
 ## 本次分享包验证范围
 
-- 两目标均完成编译；Metalio 标志和书籍封面显示已获用户确认。本次最后修改为移除锁屏底部说明、统一两机“已关机”留屏；睡眠回归及模拟器预览通过，Metalio 新程序已烧录，用户确认封面无遮挡、短按唤醒正常、关机留屏显示正确；Pico 本次程序也已刷入并确认启动及 SD 读取正常，用户确认翻页和锁屏正常，软件关机入口及画面仍未实机验收。
-- Pico 从当前源码重新构建，未为分享包重新刷写设备；既有阅读、SD 恢复和唤醒反馈来自先前同一开发分支。
-- 两个全量镜像按段比较启动程序、分区、app、内置存储，确认偏移和内容，并检查 NVS／未使用区为全 `0xFF`。
-- metadata／封面步骤以本地合成 EPUB 验证，不把个人书籍纳入测试交付。
-- Metalio 已知 SDK 弃用提示涉及 `esp_sleep_get_wakeup_cause()`，构建成功；未因此更改本次实测过的固件。
+- 小纸 preview.20 编译通过；导航、划线、模式切换与隐藏书库、睡眠、事件循环、书库可见性及跨行拖动等电脑回归通过。已烧录并正常启动；用户确认本轮划线／查词切换、跨行选字、隐藏书库、锁屏唤醒及新版说明书正常。Wi-Fi传书本版尚未测试；不将本次反馈扩展为USB、校时、续航或长期稳定性的专项验收。
+- 最新源码通过无名界面兼容回归；这不表示本次重新发布无名固件。原无名 ZIP、对应原源码 ZIP 和此前真机记录保持原样。
+- 词库数据沿用已测试的 preview.10，随本次单独打包为 `simple-offline-reading-dictionary-2026.11.21-preview.20.zip`，保留来源和许可。发布标签不表示重新生成了词库数据。
+- 发布前须对最终完整镜像分段核对启动程序、分区、app 和机内资源，核对空白 NVS／未使用区及归档 SHA-256。本次文档更新本身不生成镜像，也不代替这些检查。
+- 元数据／封面工具已有本地合成 EPUB 验证；不把个人书籍纳入交付。长期稳定性、续航及网页整包写入不因编译通过而视为验收。
 - 不提供真实设备 MAC、USB 序列号、完整备份、NVS 读取结果或私人日志。校验清单只记录发布文件自身的信息。

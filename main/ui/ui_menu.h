@@ -34,9 +34,6 @@ extern "C" {
 #define UI_KEY_COUNT 3
 #define UI_KEY_AREA_TOP 1300
 #define UI_KEY_PITCH 160
-#define UI_KEY_1 0
-#define UI_KEY_2 1
-#define UI_KEY_3 2
 
 /// 底栏最右那格的菜单把手，箭头向上表示能打开菜单。所有页都要画。
 /// Menu handle in the rightmost bar cell; an up arrow means the menu can open. Every page draws it.

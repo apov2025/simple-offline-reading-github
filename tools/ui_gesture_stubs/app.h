@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 typedef struct { bool touched; uint8_t count; uint16_t x, y; } cst836u_touch_t;
+typedef cst836u_touch_t reader_touch_t;
 typedef struct {
     int64_t now_ms;
     const cst836u_touch_t *touch;

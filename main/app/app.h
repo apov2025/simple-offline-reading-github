@@ -10,21 +10,14 @@
  * Draw, hit-test, poll and page state stay there. app_loop.c only dispatches
  * these callbacks; adding a page does not touch the loop.
  *
- * 冻结：手势回调替代旧触摸回调；三键接管页须保留强刷与菜单出口。
- * Frozen: Gesture callbacks replace legacy touch callbacks. Pages owning keys
- * must retain full refresh and menu exits.
- * 冻结（本项目追加）：产品页（no_menu）屏幕上不出现演示菜单把手，三键由产品定义
- * （阅读器：左键设置、中键返回、右键全刷）。强刷与演示菜单的出口仍要有，但放在
- * 不打扰阅读的位置（阅读器：右键全刷、书库页长按中键进演示菜单）。
- * 原因：产品目标是极简阅读器，硬件演示菜单不属于日常界面。
- * Frozen (added by this fork): product pages (no_menu) never show the demo menu
- * handle on screen, and their three keys are product-defined (reader: left =
- * settings, middle = back, right = full refresh). Full refresh and the demo-menu
- * exit must still exist, out of the reading flow (reader: the right key refreshes,
- * long-press the middle key in the library for the demo menu). Reason: the
- * product is a minimal reader; the hardware demo menu is not an everyday screen.
- * 冻结：返回恢复最近切页来源，菜单来源保留菜单位置。
- * Frozen: Return restores the latest page origin, preserving its menu position.
+ * 冻结：手势回调替代旧触摸回调；产品页接管三键并提供强刷、中键返回。
+ * Frozen: gesture callbacks replace legacy touch callbacks; product pages own keys, full refresh and middle-key back.
+ * 冻结：用户要求删除系统 demo；产品页 no_menu 不得请求或显示演示菜单。
+ * 产品页的无目标返回回书库；显式 request_app 用于原生功能之间切换。
+ * Frozen: demos are removed at user request; no_menu product pages never open demo menus.
+ * Untargeted product returns land in the library; explicit request_app switches native features.
+ * 非产品测试页仍保留通用菜单来源恢复，供独立驱动测试使用。
+ * Non-product test pages retain generic origin restoration for standalone driver tests.
  */
 
 #pragma once
@@ -112,6 +105,12 @@ struct app_desc_s {
     /// true = 停留在本页时不计空闲自动休眠。电源键锁屏仍走全局路径。
     /// true = idle time does not auto-sleep while this page is current. The power key still locks.
     bool blocks_idle_sleep;
+    /// 独占读卡页暂停主循环的介质检测和 SD 字体恢复。/ Exclusive card pages suspend media polling and saved SD-font restoration.
+    bool blocks_media_access;
+    /// 仅明确安全的页空闲预读小纸壁纸；默认关闭。/ Opt in to Pico wallpaper preloading at idle on explicitly safe pages; off by default.
+    bool preloads_wallpaper;
+    /// 传输时消费但忽略短按电源，避免断电和积压按键。/ Consume but ignore short power presses during transfers.
+    bool blocks_power_lock;
     /// true = 产品页：屏幕右下角不是演示菜单把手，点那里只是普通触摸。须与 owns_keys 同用。
     /// true = product page: the bottom-right corner is not the demo menu handle; a tap there is an ordinary touch. Use with owns_keys.
     bool no_menu;
@@ -121,6 +120,11 @@ struct app_desc_s {
     /// on_exit also runs before a soft-sleep/off lock; on_enter runs again if power-down fails.
     void (*on_enter)(app_ctx_t* ctx);
     void (*on_exit)(app_ctx_t* ctx);
+    /// 实际锁屏前清理临时状态：手势取消后、封面绘制与 on_exit 前调用；浅睡也调用。
+    /// Clear transient state on an actual lock, after gesture cancellation and before cover drawing/on_exit, including light sleep.
+    /// 校时清理未完成或页面禁止锁屏时不调用；不得直接睡眠或绘制锁屏。
+    /// Not called while clock cleanup is pending or locking is blocked; do not sleep or draw the lock screen here.
+    void (*on_lock)(app_ctx_t* ctx);
     /// TF 挂载失效：停止并等待后台任务、关闭文件；主循环随后回退字体并重绘，菜单打开时也通知。
     /// On TF mount loss, join background work and close files before font fallback/redraw; also called behind menus.
     void (*on_media_lost)(app_ctx_t* ctx);
@@ -132,12 +136,18 @@ struct app_desc_s {
     bool (*present)(app_ctx_t* ctx, app_redraw_t redraw);
     /// 设置后独占触摸派发，替代 on_touch。/ Exclusive gesture dispatch replaces on_touch.
     app_redraw_t (*on_gesture)(app_ctx_t* ctx, const ui_gesture_event_t* event);
+    /// 可选纯判断：长按回调确认选中后，仅本次保持允许拖动；缺省越界取消。
+    /// Optional pure predicate after LONG_PRESS: allow dragging this selected hold; default cancels outside slop.
+    bool (*allow_long_drag)(app_ctx_t* ctx);
     app_redraw_t (*on_touch)(app_ctx_t* ctx, const reader_touch_t* touch);
     /// 默认只收 UI_KEY_1；owns_keys 页面在菜单外接收三键。
     /// / Only KEY1 normally; owns_keys pages receive all three keys outside the menu.
     app_redraw_t (*on_key)(app_ctx_t* ctx, int key);
-    /// 可选：owns_keys 页面同键持续按住500ms触发一次，按下回调仍先执行；滑出/中断取消。
-    /// Optional: fire once after a 500ms same-key hold on owns_keys pages; press still fires first, leaving/interruption cancels.
+    /// 可选纯判断：接管键短按延至有效抬起，长按触发后不补短按；缺省按下即触发。
+    /// Optional pure predicate: defer an owned key until valid release; a long hold suppresses it. Default fires on press.
+    bool (*defer_key)(app_ctx_t* ctx, int key);
+    /// 可选：接管页同键单指按住500ms触发一次；默认先按下，defer_key 可延迟短按，滑出/中断取消。
+    /// Optional: fire once after a 500ms single-finger same-key hold; press fires first unless defer_key delays it. Leaving/interruption cancels.
     app_redraw_t (*on_key_long)(app_ctx_t* ctx, int key);
     /// 每轮都调，页面自己判断到不到刷新间隔。
     /// / Called every tick; the page decides if its interval has elapsed.

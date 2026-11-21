@@ -30,6 +30,8 @@ int main(void) {
     epd_set_rotation(EPD_ROT_INVERTED_PORTRAIT);
     app_settings_init();
     app_ctx_t ctx = {0};
+    s_view = VIEW_READING;
+    assert(on_key_long(&ctx, UI_KEY_3) == APP_REDRAW_NONE && reader_surface() == SURFACE_BODY);
     s_view = VIEW_LIBRARY;
     s_resume_pending = true;
     s_menu = true;

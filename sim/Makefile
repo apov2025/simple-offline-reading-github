@@ -7,6 +7,7 @@
 #   make -C sim run    构建并运行 / build and run
 
 ROOT := ..
+.DEFAULT_GOAL := all
 BUILD := build
 BIN := $(BUILD)/read_pico_sim
 
@@ -17,7 +18,8 @@ SDL_LIBS := $(shell sdl2-config --libs)
 INCLUDES := \
   -Iidf -Isrc \
   -I$(ROOT)/main -I$(ROOT)/main/app -I$(ROOT)/main/apps -I$(ROOT)/main/font \
-  -I$(ROOT)/main/ui -I$(ROOT)/main/factory -I$(ROOT)/main/book \
+  -I$(ROOT)/main/ui -I$(ROOT)/main/factory -I$(ROOT)/main/book -I$(ROOT)/main/dictionary \
+  -I$(ROOT)/managed_components/espressif__cjson/cJSON \
   -I$(ROOT)/components/epdiy/src -I$(ROOT)/components/epdiy/include \
   -I$(ROOT)/components/e0470_epaper_waveform/include \
   -I$(ROOT)/components/e0470_epaper_waveform/waveforms \
@@ -38,7 +40,8 @@ CFLAGS += -std=gnu17 -D_DARWIN_C_SOURCE -DSIM_HOST=1 -Wall -Wno-unused-function 
 
 # 临时加编译参数用，例如 make EXTRA_CFLAGS='-Wextra -Werror' 做一次严格检查。
 # For one-off flags, e.g. make EXTRA_CFLAGS='-Wextra -Werror' for a strict pass.
-CFLAGS += $(EXTRA_CFLAGS)
+CFLAGS += $(EXTRA_CFLAGS) -DREADER_SIM_VERSION=\"$(shell cat $(ROOT)/version.txt)\"
+$(BUILD)/sim/sim_idf.o: $(ROOT)/version.txt
 
 # 固件源文件：强制包含 sim_fs.h 做路径重定向。
 # Firmware sources: sim_fs.h is force-included for path redirection.
@@ -46,12 +49,15 @@ FW_SRCS := \
   $(wildcard $(ROOT)/main/*.c) \
   $(wildcard $(ROOT)/main/app/*.c) \
   $(ROOT)/main/board/reader_controls.c \
-  $(ROOT)/main/board/reader_screenshot.c \
-  $(wildcard $(ROOT)/main/apps/*.c) \
+  $(ROOT)/main/board/reader_screenshot.c $(ROOT)/main/board/reader_wallpaper.c $(ROOT)/main/board/reader_clock.c \
+  $(ROOT)/main/apps/app_reader.c $(ROOT)/main/apps/app_wifi_transfer.c $(ROOT)/main/apps/app_usb_transfer.c \
   $(wildcard $(ROOT)/main/ui/*.c) \
   $(wildcard $(ROOT)/main/font/*.c) \
   $(wildcard $(ROOT)/main/factory/*.c) \
   $(wildcard $(ROOT)/main/book/*.c) \
+  $(wildcard $(ROOT)/main/dictionary/*.c) \
+  $(wildcard $(ROOT)/main/annotations/*.c) \
+  $(ROOT)/managed_components/espressif__cjson/cJSON/cJSON.c \
   $(ROOT)/main/book/vendor/tjpgd.c \
   $(ROOT)/components/epdiy/src/epdiy.c \
   $(ROOT)/components/epdiy/src/highlevel.c \
@@ -120,8 +126,10 @@ seed:
 	@for f in $(abspath $(ROOT))/ready/books/*.epub $(abspath $(ROOT))/sdcard/fonts/*.ttf; do \
 		[ -f "$$f" ] || continue; d=data/sdcard/$$(basename "$$(dirname "$$f")")/$$(basename "$$f"); \
 		[ -e "$$d" ] || ln -s "$$f" "$$d"; done
-	@cp -n $(ROOT)/builtin/storage/books/* data/flash/books/ 2>/dev/null || true
-	@cp -n $(ROOT)/builtin/storage/fonts/* data/flash/fonts/ 2>/dev/null || true
+	@cp -n $(ROOT)/builtin/pico/books/*.epub data/flash/books/ 2>/dev/null || true
+	@cp -n $(ROOT)/builtin/pico/fonts/*.ttf data/flash/fonts/ 2>/dev/null || true
+	@mkdir -p data/flash/manual
+	@cp -n $(ROOT)/builtin/pico/manual/* data/flash/manual/ 2>/dev/null || true
 
 run: $(BIN) seed
 	./$(BIN)

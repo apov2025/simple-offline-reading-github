@@ -56,3 +56,8 @@ void read_pico_sd_start_probe(void);
 
 int epd_rotated_display_width(void);
 void epd_fill_triangle(int,int,int,int,int,int,uint8_t,uint8_t*);
+
+/* 壁纸调度使用纯状态替身。/ Pure state shims for wallpaper scheduling. */
+typedef enum { APP_SLEEP_LIGHT,APP_SLEEP_DEEP,APP_SLEEP_OFF } app_sleep_mode_t;
+app_sleep_mode_t app_settings_sleep_mode(void);
+bool app_lock_has_image(void);

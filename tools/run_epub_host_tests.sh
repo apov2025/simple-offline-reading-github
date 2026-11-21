@@ -15,6 +15,7 @@ mkdir -p build/book-tests
 "${PYTHON:-python3}" tools/gen_book_fixtures.py
 "${PYTHON:-python3}" tools/test_zip_reader.py
 "${PYTHON:-python3}" tools/test_book_epub.py
+"${PYTHON:-python3}" tools/test_book_toc.py
 
 flags=(-std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Werror -g -fsanitize=address,undefined -fno-omit-frame-pointer)
 includes=(-Itools/book_epub_stubs -Itools/zip_host_stubs -Imain/book)

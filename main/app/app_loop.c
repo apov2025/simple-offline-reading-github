@@ -13,12 +13,15 @@
  *
  * 冻结：主循环只产出手势、不解释含义；只有 owns_keys 页可接管三键，
  * 且必须提供强刷和 request_menu 入口；把手仍按下即触发。
- * 接管页可选长按键回调，保留按下行为；同键单指500ms仅触发一次，中断取消。
+ * 接管页可选长按键回调，默认保留按下行为；显式延迟的键只在有效抬起短按，同键单指500ms长按后不补短按，中断取消。
+ * 原因：词典长按入口不能先触发全刷。
  * Frozen: Produce gestures without interpreting page actions. KEY2 full refresh
  * and KEY3 menu are global unless owns_keys provides its own refresh/menu exits.
- * Owners may opt into a single 500ms same-key hold callback after the press action; interruptions cancel it.
+ * Owners may opt into a single 500ms same-key hold callback. Press remains immediate by default; explicitly deferred keys fire on valid release unless held, and interruptions cancel both.
+ * Reason: dictionary holds must not trigger a full refresh before opening.
  * The menu handle still fires on press.
  * 冻结：返回消费最近切页来源，恢复原页及菜单位置，不跳固定首页。
+ * 冻结：USB独占页暂停介质/字体恢复与短按锁屏，仅保留安全退出。/ Frozen: exclusive USB pages pause media/font recovery and short-press locking until safe exit.
  * Frozen: Return consumes the latest page origin, restoring its page and menu position.
  */
 
@@ -43,6 +46,11 @@
 #include "ui_kit.h"
 #include "ui_menu.h"
 #include "ui_gesture.h"
+#if !READER_METALIO
+#include "../board/reader_wallpaper.h"
+#include "../board/reader_clock.h"
+static unsigned s_wallpaper_draws;
+#endif
 
 #define TAG "app_loop"
 
@@ -61,6 +69,9 @@ void app_lock_ignore_for(int64_t ms) {
 }
 
 void app_present(app_ctx_t* ctx, const app_desc_t* app, app_redraw_t redraw) {
+#if !READER_METALIO
+    if(redraw!=APP_REDRAW_NONE)++s_wallpaper_draws;
+#endif
     enum EpdDrawError result = EPD_DRAW_SUCCESS;
     if (app->present != NULL && app->present(ctx, redraw)) return;
     switch (redraw) {
@@ -155,6 +166,9 @@ static void switch_to(
     app_ctx_t* ctx, const app_desc_t** current, const app_desc_t* next
 ) {
     if (next == NULL || next == *current) return;
+#if !READER_METALIO
+    reader_wallpaper_invalidate();
+#endif
     if ((*current)->on_exit != NULL) (*current)->on_exit(ctx);
     *current = next;
     if (next->on_enter != NULL) next->on_enter(ctx);
@@ -164,6 +178,9 @@ static void switch_to(
 
 // 菜单页不是 app，单独画。/ The menu is not an app; present it here.
 static void present_menu(app_ctx_t* ctx, const app_desc_t* current, int leaf, menu_feedback_t* feedback) {
+#if !READER_METALIO
+    reader_wallpaper_invalidate();
+#endif
     feedback->updates = 0;
     if (display_take_white_exit()) {
         guard_draw_result(ctx->hl, update_display_white(ctx->hl));
@@ -218,6 +235,7 @@ static bool try_load_saved_sd_font(bool allow_probe) {
 // Stop file consumers before font fallback; observe mounting without unmounting or remounting.
 static bool poll_media(app_ctx_t* ctx, const app_desc_t* current,
                        bool* mounted, bool* invalidated) {
+    if(current->blocks_media_access) return false;
     reader_media_info_t info = {0};
     esp_err_t err = reader_media_get_info(&info);
     if (err == ESP_ERR_NOT_FINISHED) return false;
@@ -227,6 +245,9 @@ static bool poll_media(app_ctx_t* ctx, const app_desc_t* current,
     if (ready) *invalidated = false;
     if (!lost) return false;
     *invalidated = true;
+#if !READER_METALIO
+    reader_wallpaper_invalidate();
+#endif
     if (current->on_media_lost) current->on_media_lost(ctx);
     if (ttf_font_ready() && ttf_font_on_card()) ttf_font_open_fallback();
     return true;
@@ -234,14 +255,23 @@ static bool poll_media(app_ctx_t* ctx, const app_desc_t* current,
 
 // 电源键和空闲超时共用：收掉手势，走锁屏路径，浅睡回来后重画。
 // Shared by the power key and the idle timeout: cancel input, lock, redraw after light sleep.
+static bool s_clock_lock_pending;
 static void lock_and_resume(
     app_ctx_t* ctx, const app_desc_t* current, ui_gesture_t* gesture,
     int* held_key, int* menu_pressed, menu_feedback_t* feedback,
     bool menu_open, int menu_leaf, bool* media_mounted, bool* media_invalidated,
     int64_t* last_media_poll_ms
 ) {
+#if !READER_METALIO
+    // 先释放短时校时的网络；清理未完则下次轮询继续，不丢掉锁屏请求。/ Release time-sync networking first; retry unfinished cleanup without losing the lock request.
+    if(!reader_clock_cancel()){s_clock_lock_pending=true;return;}
+#endif
+    s_clock_lock_pending=false;
     *held_key = -1;
     cancel_gesture(ctx, current, gesture);
+    // 浅睡与下电都先清理页面隐私/临时状态，再读取封面或壁纸。
+    // Clear page privacy/transient state before acquiring any cover or wallpaper, for light sleep and power-down alike.
+    if (current->on_lock != NULL) current->on_lock(ctx);
     if (*menu_pressed >= 0) {
         menu_feedback(ctx, current, menu_leaf, *menu_pressed, false, feedback);
     }
@@ -292,6 +322,7 @@ void app_loop_run(const app_loop_config_t* config) {
     int return_leaf = 0, return_menu_leaf = 0;
     bool return_to_menu = false;
     int held_key = -1;
+    bool held_deferred = false;
     int64_t held_since_ms = 0;
     int64_t last_lock_poll_ms = 0;
     int64_t last_input_ms = esp_timer_get_time() / 1000;
@@ -309,6 +340,10 @@ void app_loop_run(const app_loop_config_t* config) {
     ESP_LOGI(TAG, "UI ready on %s", current->title);
 
     while (true) {
+#if !READER_METALIO
+        unsigned wallpaper_before=s_wallpaper_draws;
+        if(current->blocks_media_access)reader_wallpaper_invalidate();
+#endif
         reader_touch_t touch = { 0 };
         esp_err_t err = reader_touch_read(config->tp, &touch);
         if (err != ESP_OK) {
@@ -319,7 +354,8 @@ void app_loop_run(const app_loop_config_t* config) {
         const bool pressed = touch.touched && !was_touched;
         const bool released = !touch.touched && was_touched;
         debounce_touch(&latest, &touch, released);
-        ctx.now_ms = esp_timer_get_time() / 1000;
+        const int64_t touch_ms = esp_timer_get_time() / 1000;
+        ctx.now_ms = touch_ms;
         // 触摸、独占 PMU、以及声明不自动休眠的页都算活动。页面自己的轮询刷新不重置。
         // Touch, PMU-owning pages, and pages that block idle sleep count as activity. A page's own poll does not reset it.
         if (current->holds_pmu || current->blocks_idle_sleep
@@ -373,9 +409,12 @@ void app_loop_run(const app_loop_config_t* config) {
                 menu_pressed = UI_MENU_HIT_NONE;
             }
             if (key >= 0 && current->owns_keys && !menu_open) {
-                app_redraw_t redraw = current->on_key ? current->on_key(&ctx, key) : APP_REDRAW_NONE;
-                present_page(&ctx, current, &gesture, redraw);
-                if (current->on_key_long && touch.count == 1) {
+                held_deferred = current->defer_key && current->defer_key(&ctx, key);
+                if (!held_deferred) {
+                    app_redraw_t redraw = current->on_key ? current->on_key(&ctx, key) : APP_REDRAW_NONE;
+                    present_page(&ctx, current, &gesture, redraw);
+                }
+                if ((held_deferred || current->on_key_long) && touch.count == 1) {
                     held_key = key;
                     held_since_ms = ctx.now_ms;
                 }
@@ -445,6 +484,8 @@ void app_loop_run(const app_loop_config_t* config) {
             ui_gesture_event_t event;
             if (ui_gesture_feed(&gesture, &ctx, &event)) {
                 app_redraw_t redraw = current->on_gesture(&ctx, &event);
+                if (event.type == UI_GESTURE_LONG_PRESS && current->allow_long_drag)
+                    ui_gesture_allow_long_drag(&gesture, current->allow_long_drag(&ctx));
                 present_page(&ctx, current, &gesture, redraw);
                 if (redraw != APP_REDRAW_NONE) ctx.consumed = true;
             }
@@ -468,8 +509,8 @@ void app_loop_run(const app_loop_config_t* config) {
         if (reader_board_power_ready() && !current->holds_pmu
             && ctx.now_ms - last_lock_poll_ms >= APP_LOCK_POLL_MS) {
             last_lock_poll_ms = ctx.now_ms;
-            if (reader_board_take_power()) {
-                if (ctx.now_ms < s_lock_ignore_until_ms) {
+            if (reader_board_take_power() || s_clock_lock_pending) {
+                if (current->blocks_power_lock || ctx.now_ms < s_lock_ignore_until_ms) {
                     ESP_LOGI(TAG, "ignore boot KEY_SHORT");
                 } else {
                     lock_and_resume(
@@ -479,7 +520,7 @@ void app_loop_run(const app_loop_config_t* config) {
                     );
                     last_input_ms = ctx.now_ms;
                 }
-            } else if (ctx.now_ms >= s_lock_ignore_until_ms
+            } else if (!current->blocks_power_lock && ctx.now_ms >= s_lock_ignore_until_ms
                        && ctx.now_ms - last_input_ms >= APP_AUTO_SLEEP_MS) {
                 ESP_LOGI(TAG, "idle lock");
                 lock_and_resume(
@@ -494,7 +535,7 @@ void app_loop_run(const app_loop_config_t* config) {
         // 设置里存的字体在 SD 卡上，开机时卡可能还没挂好，这里定期重试。
         // The saved font lives on the card; retry until the mount is ready.
         // The saved font lives on the card; retry until the mount is ready.
-        if (ctx.now_ms - last_font_retry_ms >= FONT_RETRY_INTERVAL_MS) {
+        if (!current->blocks_media_access && ctx.now_ms - last_font_retry_ms >= FONT_RETRY_INTERVAL_MS) {
             last_font_retry_ms = ctx.now_ms;
             if (try_load_saved_sd_font(!media_invalidated)) {
                 held_key = -1;
@@ -511,11 +552,24 @@ void app_loop_run(const app_loop_config_t* config) {
         }
 
         if (held_key >= 0) {
-            if (menu_open || ctx.request_app || ctx.request_menu || ctx.request_return || !touch.touched ||
-                touch.count != 1 || ui_key_hit_test(touch.x, touch.y) != held_key ||
+            if (menu_open || ctx.request_app || ctx.request_menu || ctx.request_return ||
                 ctx.now_ms < held_since_ms) {
                 held_key = -1;
-            } else if (!pressed && ctx.now_ms - held_since_ms >= UI_LONG_PRESS_MS) {
+            } else if (released && held_deferred && ui_key_hit_test(latest.x, latest.y) == held_key) {
+                int key = held_key;
+                held_key = -1;
+                ctx.consumed = true;
+                // 500ms 恰好落在本次松手采样时仍算长按。/ A release sampled at 500 ms still qualifies as a hold.
+                app_redraw_t redraw = APP_REDRAW_NONE;
+                if (current->on_key_long && touch_ms - held_since_ms >= UI_LONG_PRESS_MS) {
+                    redraw = current->on_key_long(&ctx, key);
+                } else if (current->on_key) {
+                    redraw = current->on_key(&ctx, key);
+                }
+                present_page(&ctx, current, &gesture, redraw);
+            } else if (!touch.touched || touch.count != 1 || ui_key_hit_test(touch.x, touch.y) != held_key) {
+                held_key = -1;
+            } else if (!pressed && current->on_key_long && ctx.now_ms - held_since_ms >= UI_LONG_PRESS_MS) {
                 int key = held_key;
                 held_key = -1;
                 ctx.consumed = true;
@@ -537,6 +591,9 @@ void app_loop_run(const app_loop_config_t* config) {
         // 返回来源优先；普通请求仍按切页优先处理。
         // Return requests win; ordinary requests still prioritize page switches.
         if (ctx.request_return || ctx.request_app || ctx.request_menu) {
+#if !READER_METALIO
+            reader_wallpaper_invalidate();
+#endif
             held_key = -1;
             const app_desc_t* next = ctx.request_app;
             const bool go_back = ctx.request_return;
@@ -546,12 +603,20 @@ void app_loop_run(const app_loop_config_t* config) {
             ctx.request_menu = false;
             ctx.request_return = false;
             ctx.consumed = true;
-            if (go_back) {
+            if (current->no_menu && (go_back || !next)) {
+                // 产品页永不进入演示菜单；不依赖可能丢失的单层历史。/ Product exits never open demos or depend on a single history slot.
+                menu_open = false;
+                return_app = NULL;
+                switch_to(&ctx, &current, app_home_page());
+            } else if (go_back) {
                 menu_open = return_app ? return_to_menu : true;
                 menu_leaf = return_app ? return_menu_leaf : ui_menu_leaf_for_app(current);
                 if (return_app) {
                     if (current->on_exit) current->on_exit(&ctx);
                     current = return_app;
+#if !READER_METALIO
+                    if(current->blocks_media_access)reader_wallpaper_invalidate();
+#endif
                     return_app = NULL;
                     if (current->on_enter) current->on_enter(&ctx);
                     // 初始化后恢复通用页码，避免 on_enter 的默认页码覆盖来源。
@@ -576,6 +641,12 @@ void app_loop_run(const app_loop_config_t* config) {
                 present_menu(&ctx, current, menu_leaf, &feedback);
             }
         }
+#if !READER_METALIO
+        // 输入与页面工作优先；本轮画过屏就不抢读卡时间。/ Input and page work win; a tick that painted never spends time preloading.
+        if(current->preloads_wallpaper && media_mounted && !media_invalidated && !current->blocks_media_access && !menu_open && !touch.touched && !ctx.consumed &&
+           wallpaper_before==s_wallpaper_draws && ctx.now_ms-last_input_ms>=500)
+            reader_wallpaper_idle(app_settings_sleep_mode()==APP_SLEEP_OFF,app_lock_has_image());
+#endif
         vTaskDelay(pdMS_TO_TICKS(LOOP_TICK_MS));
     }
 }

@@ -1,0 +1,1289 @@
+[
+  {
+    "word": "走",
+    "pronunciation": "zǒu",
+    "source": "维基词典（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "行走",
+        "synonyms": [],
+        "pronunciation": "zǒu"
+      },
+      {
+        "pos": "",
+        "gloss": "奔跑",
+        "synonyms": [],
+        "pronunciation": "zǒu"
+      },
+      {
+        "pos": "",
+        "gloss": "离开",
+        "synonyms": [],
+        "pronunciation": "zǒu"
+      }
+    ],
+    "aliases": [],
+    "source_revision": 7393260,
+    "source_url": "https://zh.wiktionary.org/w/index.php?oldid=7393260",
+    "original_glosses": [
+      "walk",
+      "run",
+      "leave"
+    ],
+    "change": "将中文栏所列英语译词译为简体中文；仅取已核对的对应含义，不声称为完整中文释义。译释由 AI 整理并对照原词，仅为部分词义。",
+    "license": "CC-BY-SA-4.0"
+  },
+  {
+    "word": "道",
+    "pronunciation": "dào",
+    "source": "维基词典（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "道路、街道",
+        "synonyms": [],
+        "pronunciation": "dào"
+      },
+      {
+        "pos": "",
+        "gloss": "方法、途径",
+        "synonyms": [],
+        "pronunciation": "dào"
+      }
+    ],
+    "aliases": [],
+    "source_revision": 9933058,
+    "source_url": "https://zh.wiktionary.org/w/index.php?oldid=9933058",
+    "original_glosses": [
+      "path, road, street",
+      "method, way"
+    ],
+    "change": "将中文栏所列英语译词译为简体中文；仅取已核对的对应含义，不声称为完整中文释义。译释由 AI 整理并对照原词，仅为部分词义。",
+    "license": "CC-BY-SA-4.0"
+  },
+  {
+    "word": "这",
+    "pronunciation": "zhè",
+    "source": "维基词典（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "这个",
+        "synonyms": [],
+        "pronunciation": "zhè"
+      }
+    ],
+    "aliases": [
+      "這"
+    ],
+    "source_revision": 9662673,
+    "source_url": "https://zh.wiktionary.org/w/index.php?oldid=9662673",
+    "original_glosses": [
+      "this"
+    ],
+    "change": "将中文栏所列英语译词译为简体中文；仅取已核对的对应含义，不声称为完整中文释义。译释由 AI 整理并对照原词，仅为部分词义。",
+    "license": "CC-BY-SA-4.0"
+  },
+  {
+    "word": "bank",
+    "pronunciation": "/bæŋk/",
+    "source": "维基词典",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "银行",
+        "synonyms": []
+      },
+      {
+        "pos": "",
+        "gloss": "库存、库",
+        "synonyms": []
+      },
+      {
+        "pos": "",
+        "gloss": "岸、河畔",
+        "synonyms": []
+      },
+      {
+        "pos": "",
+        "gloss": "斜坡、垄、埂",
+        "synonyms": []
+      }
+    ],
+    "source_revision": 10143035,
+    "source_url": "https://zh.wiktionary.org/w/index.php?oldid=10143035",
+    "change": "提取英语栏四项中文释义，去除维基链接标记。",
+    "license": "CC-BY-SA-4.0"
+  },
+  {
+    "word": "beautiful",
+    "pronunciation": "/ˈbjuːtɪfəl/",
+    "source": "维基词典",
+    "senses": [
+      {
+        "pos": "形容词",
+        "gloss": "美丽的",
+        "synonyms": []
+      }
+    ],
+    "source_revision": 6555397,
+    "source_url": "https://zh.wiktionary.org/w/index.php?oldid=6555397",
+    "change": "提取英语栏的实际中文释义，转为简体，去除维基链接标记；read取第一英语栏。",
+    "license": "CC-BY-SA-4.0"
+  },
+  {
+    "word": "read",
+    "pronunciation": "/ɹiːd/",
+    "source": "维基词典",
+    "senses": [
+      {
+        "pos": "动词",
+        "gloss": "看",
+        "synonyms": []
+      },
+      {
+        "pos": "动词",
+        "gloss": "阅读",
+        "synonyms": []
+      },
+      {
+        "pos": "动词",
+        "gloss": "理解内容",
+        "synonyms": []
+      },
+      {
+        "pos": "动词",
+        "gloss": "朗读",
+        "synonyms": []
+      },
+      {
+        "pos": "动词",
+        "gloss": "听懂",
+        "synonyms": []
+      },
+      {
+        "pos": "动词",
+        "gloss": "研习",
+        "synonyms": []
+      },
+      {
+        "pos": "动词",
+        "gloss": "有阅读能力",
+        "synonyms": []
+      }
+    ],
+    "source_revision": 8893415,
+    "source_url": "https://zh.wiktionary.org/w/index.php?oldid=8893415",
+    "change": "提取英语栏的实际中文释义，转为简体，去除维基链接标记；read取第一英语栏。",
+    "license": "CC-BY-SA-4.0"
+  },
+  {
+    "word": "到",
+    "pronunciation": "dào",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "到达；去往；曾去过。",
+        "synonyms": [],
+        "pronunciation": "dào"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "到",
+    "original_glosses": [
+      "go to, arrive, been to"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "主",
+    "pronunciation": "zhǔ",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "主人；首领；东道主。",
+        "synonyms": [],
+        "pronunciation": "zhǔ"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "主",
+    "original_glosses": [
+      "master, chief owner; host; lord"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "国",
+    "pronunciation": "guó",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "国家。",
+        "synonyms": [],
+        "pronunciation": "guó"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "国",
+    "original_glosses": [
+      "nation, country, nation-state"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "生",
+    "pronunciation": "shēng",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "生命；生活；一生；出生。",
+        "synonyms": [],
+        "pronunciation": "shēng"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "生",
+    "original_glosses": [
+      "life, living, lifetime; birth"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "起",
+    "pronunciation": "qǐ",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "起来，站起；升起；开始。",
+        "synonyms": [],
+        "pronunciation": "qǐ"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "起",
+    "original_glosses": [
+      "rise, stand up; go up; begin"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "能",
+    "pronunciation": "néng",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "能够；可以；能力。",
+        "synonyms": [],
+        "pronunciation": "néng"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "能",
+    "original_glosses": [
+      "to be able; can, permitted to; ability"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "多",
+    "pronunciation": "duō",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "数量大；超过。",
+        "synonyms": [],
+        "pronunciation": "duō"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "多",
+    "original_glosses": [
+      "much, many; more than, over"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "工",
+    "pronunciation": "gōng",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "劳动，工作；工人。",
+        "synonyms": [],
+        "pronunciation": "gōng"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "工",
+    "original_glosses": [
+      "labor, work; worker, laborer"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "动",
+    "pronunciation": "dòng",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "移动；发生；行动。",
+        "synonyms": [],
+        "pronunciation": "dòng"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "动",
+    "original_glosses": [
+      "move, happen; movement, action"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "用",
+    "pronunciation": "yòng",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "使用，运用；操作。",
+        "synonyms": [],
+        "pronunciation": "yòng"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "用",
+    "original_glosses": [
+      "use, employ, apply, operate; use"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "又",
+    "pronunciation": "yòu",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "也；再次；另外。",
+        "synonyms": [],
+        "pronunciation": "yòu"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "又",
+    "original_glosses": [
+      "and, also, again, in addition"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "作",
+    "pronunciation": "zuò",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "制作；工作；写作；表演。",
+        "synonyms": [],
+        "pronunciation": "zuò"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "作",
+    "original_glosses": [
+      "make; work; compose, write; act, perform"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "民",
+    "pronunciation": "mín",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "人民；臣民；公民。",
+        "synonyms": [],
+        "pronunciation": "mín"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "民",
+    "original_glosses": [
+      "people, subjects, citizens"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "想",
+    "pronunciation": "xiǎng",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "思考；推测；打算；考虑。",
+        "synonyms": [],
+        "pronunciation": "xiǎng"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "想",
+    "original_glosses": [
+      "think, speculate, plan, consider"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "面",
+    "pronunciation": "miàn",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "脸；表面；平面；一侧或一个方面。",
+        "synonyms": [],
+        "pronunciation": "miàn"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "面",
+    "original_glosses": [
+      "face; surface; plane; side, dimension; Kangxi radical 176"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "成",
+    "pronunciation": "chéng",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "完成；成为定局。",
+        "synonyms": [],
+        "pronunciation": "chéng"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "成",
+    "original_glosses": [
+      "completed, finished, fixed"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "义",
+    "pronunciation": "yì",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "正当的行为；正义。",
+        "synonyms": [],
+        "pronunciation": "yì"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "义",
+    "original_glosses": [
+      "right conduct, righteousness"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "经",
+    "pronunciation": "jīng",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "经典著作；经过。",
+        "synonyms": [],
+        "pronunciation": "jīng"
+      }
+    ],
+    "aliases": [
+      "經"
+    ],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "經",
+    "original_glosses": [
+      "classic works; pass through"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "产",
+    "pronunciation": "chǎn",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "生育；产生；生产。",
+        "synonyms": [],
+        "pronunciation": "chǎn"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "产",
+    "original_glosses": [
+      "give birth, bring forth, produce"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "进",
+    "pronunciation": "jìn",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "前进；进步；进入。",
+        "synonyms": [],
+        "pronunciation": "jìn"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "进",
+    "original_glosses": [
+      "advance, make progress, enter"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "儿",
+    "pronunciation": "ér",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "儿子；儿童。",
+        "synonyms": [],
+        "pronunciation": "ér"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "儿",
+    "original_glosses": [
+      "son, child; Kangxi radical 10"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "点",
+    "pronunciation": "diǎn",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "小点，斑点；点位；程度。",
+        "synonyms": [],
+        "pronunciation": "diǎn"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "点",
+    "original_glosses": [
+      "dot, speck, spot; point, degree"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "些",
+    "pronunciation": "xiē",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "少量；有点，略微。",
+        "synonyms": [],
+        "pronunciation": "xiē"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "些",
+    "original_glosses": [
+      "little, few; rather, somewhat"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "事",
+    "pronunciation": "shì",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "事情，事务；服事；事件。",
+        "synonyms": [],
+        "pronunciation": "shì"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "事",
+    "original_glosses": [
+      "affair, matter, business; to serve; accident, incident"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "方",
+    "pronunciation": "fāng",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "方形，长方形；地区；地方的。",
+        "synonyms": [],
+        "pronunciation": "fāng"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "方",
+    "original_glosses": [
+      "a square, rectangle; a region; local"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "而",
+    "pronunciation": "ér",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "表示连接、承接或转折，可相当于“并且”“然后”“但是”。",
+        "synonyms": [],
+        "pronunciation": "ér"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "而",
+    "original_glosses": [
+      "and; and then; and yet; but; Kangxi radical 126"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "实",
+    "pronunciation": "shí",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "真实；诚实，真诚。",
+        "synonyms": [],
+        "pronunciation": "shí"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "实",
+    "original_glosses": [
+      "real, true; honest, sincere"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "问",
+    "pronunciation": "wèn",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "询问；问候。",
+        "synonyms": [],
+        "pronunciation": "wèn"
+      }
+    ],
+    "aliases": [
+      "問"
+    ],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "問",
+    "original_glosses": [
+      "ask (about), inquire after"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "定",
+    "pronunciation": "dìng",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "决定；确定；固定。",
+        "synonyms": [],
+        "pronunciation": "dìng"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "定",
+    "original_glosses": [
+      "decide, settle, fix"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "己",
+    "pronunciation": "jǐ",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "自己；个人的；天干的第六位。",
+        "synonyms": [],
+        "pronunciation": "jǐ"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "己",
+    "original_glosses": [
+      "self, oneself; personal, private; 6th heavenly stem"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "意",
+    "pronunciation": "yì",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "思想；想法；意见；思考。",
+        "synonyms": [],
+        "pronunciation": "yì"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "意",
+    "original_glosses": [
+      "thought, idea, opinion; think"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "知",
+    "pronunciation": "zhī",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "知道；察觉；理解。",
+        "synonyms": [],
+        "pronunciation": "zhī"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "知",
+    "original_glosses": [
+      "know, perceive, comprehend"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "社",
+    "pronunciation": "shè",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "土地神及祭祀土地神的坛；群体，团体。",
+        "synonyms": [],
+        "pronunciation": "shè"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "社",
+    "original_glosses": [
+      "god of the soil and altars to him; group of families; company, society"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "理",
+    "pronunciation": "lǐ",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "道理；逻辑；管理。",
+        "synonyms": [],
+        "pronunciation": "lǐ"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "理",
+    "original_glosses": [
+      "reason, logic; manage"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "战",
+    "pronunciation": "zhàn",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "战争；战斗。",
+        "synonyms": [],
+        "pronunciation": "zhàn"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "战",
+    "original_glosses": [
+      "war, fighting, battle"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "候",
+    "pronunciation": "hòu",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "等待；期望；拜访；问候。",
+        "synonyms": [],
+        "pronunciation": "hòu"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "候",
+    "original_glosses": [
+      "wait; expect; visit; greet"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "但",
+    "pronunciation": "dàn",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "仅仅；但是，然而。",
+        "synonyms": [],
+        "pronunciation": "dàn"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "但",
+    "original_glosses": [
+      "only; but, however, yet, still"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "声",
+    "pronunciation": "shēng",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "声音；嗓音；音调；音乐。",
+        "synonyms": [],
+        "pronunciation": "shēng"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "声",
+    "original_glosses": [
+      "sound, voice, noise; tone; music"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "如",
+    "pronunciation": "rú",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "如果；仿佛；像。",
+        "synonyms": [],
+        "pronunciation": "rú"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "如",
+    "original_glosses": [
+      "if, supposing; as if; like, as"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "使",
+    "pronunciation": "shǐ",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "使得；派遣，命令；使者。",
+        "synonyms": [],
+        "pronunciation": "shǐ"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "使",
+    "original_glosses": [
+      "cause, send on a mission, order; envoy, messenger, ambassador"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "情",
+    "pronunciation": "qíng",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "感情；情绪。",
+        "synonyms": [],
+        "pronunciation": "qíng"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "情",
+    "original_glosses": [
+      "feeling, sentiment, emotion"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "做",
+    "pronunciation": "zuò",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "工作；制作；行动。",
+        "synonyms": [],
+        "pronunciation": "zuò"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "做",
+    "original_glosses": [
+      "work, make; act"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "身",
+    "pronunciation": "shēn",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "身体；躯干；物体的主体。",
+        "synonyms": [],
+        "pronunciation": "shēn"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "身",
+    "original_glosses": [
+      "body; trunk, hull; Kangxi radical 158"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "已",
+    "pronunciation": "yǐ",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "已经；完毕；停止。",
+        "synonyms": [],
+        "pronunciation": "yǐ"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "已",
+    "original_glosses": [
+      "already; finished; stop"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "最",
+    "pronunciation": "zuì",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "程度最高；极其。",
+        "synonyms": [],
+        "pronunciation": "zuì"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "最",
+    "original_glosses": [
+      "most, extremely, exceedingly"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "怎",
+    "pronunciation": "zěn",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "怎么；为什么；怎样。",
+        "synonyms": [],
+        "pronunciation": "zěn"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "怎",
+    "original_glosses": [
+      "what? why? how?"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "别",
+    "pronunciation": "bié",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "分开；另外的；不要。",
+        "synonyms": [],
+        "pronunciation": "bié"
+      }
+    ],
+    "aliases": [
+      "別"
+    ],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "別",
+    "original_glosses": [
+      "separate, other; do not"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "级",
+    "pronunciation": "jí",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "等级；级别；班级。",
+        "synonyms": [],
+        "pronunciation": "jí"
+      }
+    ],
+    "aliases": [
+      "級"
+    ],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "級",
+    "original_glosses": [
+      "level, rank, class; grade"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "放",
+    "pronunciation": "fàng",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "放置；释放；解放。",
+        "synonyms": [],
+        "pronunciation": "fàng"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "放",
+    "original_glosses": [
+      "put, release, free, liberate"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  },
+  {
+    "word": "路",
+    "pronunciation": "lù",
+    "source": "Unihan（译释）",
+    "senses": [
+      {
+        "pos": "",
+        "gloss": "道路；路径；街道；旅程。",
+        "synonyms": [],
+        "pronunciation": "lù"
+      }
+    ],
+    "aliases": [],
+    "source_url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+    "source_field": "kDefinition",
+    "source_character": "路",
+    "original_glosses": [
+      "road, path, street; journey"
+    ],
+    "change": "将已记录的英文简释译为简体中文；省去部首索引信息。由 AI 整理并逐项对照源词义，不构成完整字典或上下文判义。",
+    "license": "Unicode-3.0"
+  }
+]
