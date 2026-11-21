@@ -1,6 +1,6 @@
 {
   "project": "简单离线阅读 by apov",
-  "release": "2026.11.21-preview.20",
+  "release": "2026.11.21-preview",
   "upstream_baseline": "MindReset/read_pico_firmware @ 6a247cc",
   "source_kind": "current working-tree snapshot, including documented modifications",
   "idf_version": "v6.1",
@@ -13,8 +13,11 @@
   "personal_device_backups_included": false,
   "notes": "Source PNG metadata removed from supplied/generated logo and preview; firmware uses the included packed array.",
   "targets": {
-    "pico": "2026.11.21-preview.20",
-    "metalio": "Compatibility sources only; distributed Metalio binary matches legacy 2026.11.18 source archive"
+    "pico": "2026.11.21-preview",
+    "metalio": "Shared compatibility source retained; not released or updated in this Release"
   },
-  "hardware_validation": "Installed, full readback and boot verified. User confirmed mode toggle, cross-row dictionary selection, hidden library, wake and internal guide; Wi-Fi transfer not tested this version."
+  "hardware_validation": "功能相同的上一构建已烧录、完整校验并由用户确认本轮交互正常；本次仅统一版本标识后重新编译，新 BIN 未重复烧录。Wi-Fi传书已实测成功传入一本书。",
+  "release_targets": [
+    "pico"
+  ]
 }
